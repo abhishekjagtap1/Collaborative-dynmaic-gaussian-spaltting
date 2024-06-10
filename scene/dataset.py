@@ -22,6 +22,7 @@ class FourDGSdataset(Dataset):
         if self.dataset_type != "PanopticSports":
             try:
                 image, w2c, time, depth = self.dataset[index]
+                #store = self.dataset[index]
                 extrinsic_matrix = w2c['extrinsic_matrix']
                 R = extrinsic_matrix[:3, :3]  # .transpose()
                 T = extrinsic_matrix[:3, 3]
@@ -30,7 +31,7 @@ class FourDGSdataset(Dataset):
                 FovY = focal2fov(self.dataset.focal[0], image.shape[1])
                 mask=None
                 F = w2c['intrinsic_matrix']
-                #depth = None
+                depth = None
             except:
                 print("Wrong loop for loading Data")
                 caminfo = self.dataset[index]
@@ -40,10 +41,12 @@ class FourDGSdataset(Dataset):
                 FovX = caminfo.FovX
                 FovY = caminfo.FovY
                 time = caminfo.time
-                depth = None #caminfo.depth
+                depth = None #caminfo.depth #
     
                 mask = caminfo.mask
-                F=None
+                F = None #np.eye(4)#
+                #F=np.eye(4)
+                #F [:3, :3] =
             return Camera(colmap_id=index,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
                               image_name=f"{index}",uid=index,data_device=torch.device("cuda"),time=time,
                               mask=mask, F=F, depth=depth)

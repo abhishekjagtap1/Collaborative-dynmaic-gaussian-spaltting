@@ -449,8 +449,8 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     # loading all the data follow hexplane format
     # ply_path = os.path.join(datadir, "points3D_dense.ply")
     #ply_path = os.path.join(datadir, "lidar_init/points3d_south_vehilce_filtered.ply") # This gave a NAN
-    #ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #This also gave NAN
-    ply_path = os.path.join(datadir, "lidar_init/downsample_points_colouzred_distengled_scene.ply")
+    ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #This also gave NAN
+    #ply_path = os.path.join(datadir, "lidar_init/downsample_points_colouzred_distengled_scene.ply") #this gives Nan after 5100 iterations
 
     from scene.neural_3D_dataset_NDC import Neural3D_NDC_Dataset
     train_dataset = Neural3D_NDC_Dataset(

@@ -182,6 +182,59 @@ def process_videos(videos, skip_index, img_wh, downsample, transform, num_worker
                 current_index += 1
     return all_imgs
 
+
+def generate_novel_poses_infra(extrinsic_matrix, num_poses=20, translation_variation=0.1, rotation_variation=0.1):
+    def perturb_matrix(matrix, translation_variation, rotation_variation):
+        # Generate random small translations
+        translation_perturbation = np.random.uniform(-translation_variation, translation_variation, size=(3,))
+
+        # Generate random small rotations
+        angle_x = np.random.uniform(-rotation_variation, rotation_variation)
+        angle_y = np.random.uniform(-rotation_variation, rotation_variation)
+        angle_z = np.random.uniform(-rotation_variation, rotation_variation)
+
+        # Construct rotation matrices
+        Rx = np.array([
+            [1, 0, 0],
+            [0, np.cos(angle_x), -np.sin(angle_x)],
+            [0, np.sin(angle_x), np.cos(angle_x)]
+        ])
+
+        Ry = np.array([
+            [np.cos(angle_y), 0, np.sin(angle_y)],
+            [0, 1, 0],
+            [-np.sin(angle_y), 0, np.cos(angle_y)]
+        ])
+
+        Rz = np.array([
+            [np.cos(angle_z), -np.sin(angle_z), 0],
+            [np.sin(angle_z), np.cos(angle_z), 0],
+            [0, 0, 1]
+        ])
+
+        # Combine rotations
+        rotation_perturbation = Rz @ Ry @ Rx
+
+        # Apply perturbations to the extrinsic matrix
+        perturbed_matrix = np.copy(matrix)
+        perturbed_matrix[:3, :3] = rotation_perturbation @ perturbed_matrix[:3, :3]
+        perturbed_matrix[:3, 3] += translation_perturbation
+
+        return perturbed_matrix
+
+    novel_poses = [perturb_matrix(extrinsic_matrix, translation_variation, rotation_variation) for _ in
+                   range(num_poses)]
+
+    return novel_poses
+
+def generate_translated_poses(extrinsic_matrix, translations):
+    poses = []
+    for translation in translations:
+        perturbed_matrix = np.copy(extrinsic_matrix)
+        perturbed_matrix[:3, 3] += translation
+        poses.append(perturbed_matrix)
+    return poses
+
 def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
     """
     Generate a set of poses using NeRF's spiral camera trajectory as validation poses.
@@ -205,6 +258,31 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
         c2w, up, rads, focal, zdelta, zrate=0.5, N=N_views
     )
     return np.stack(render_poses)
+
+
+def generate_spiral_poses_vehicle(extrinsic_matrix, num_poses=20, translation_step=0.05, rotation_step=2):
+    poses = []
+    for i in range(num_poses):
+        angle = i * rotation_step * (np.pi / 180)  # Convert degrees to radians
+        rotation_matrix = np.array([
+            [np.cos(angle), -np.sin(angle), 0, 0],
+            [np.sin(angle), np.cos(angle), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        translation_vector = np.array([
+            [1, 0, 0, translation_step * i],
+            [0, 1, 0, translation_step * i],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        perturbed_matrix = np.matmul(rotation_matrix, extrinsic_matrix)
+        perturbed_matrix = np.matmul(translation_vector, perturbed_matrix)
+
+        poses.append(perturbed_matrix)
+    return poses
 
 
 class Neural3D_NDC_Dataset(Dataset):
@@ -346,9 +424,47 @@ class Neural3D_NDC_Dataset(Dataset):
                                                    [93.20805656, 47.90351592, -1482.13403199, 687.84781276],
                                                    [0.73326062, 0.59708904, -0.32528854, -1.30114325]],
                                                   dtype=np.float32)
+
+                        """
+                        Use this only for rendering novel poses
+                         """
+
+                        novel_poses = generate_novel_poses_infra(extrinsic_south_2)
+                        #novel_poses = get_spiral(poses, self.near_fars, N_views=N_views)
+
+                        #for i, pose in enumerate(novel_poses):
+                         #   print(f"Pose {i + 1}:\n{pose}\n")
+
+
+
+                        """
+                        Use this for up and down poses
+                        
+
+                        translation_variations_up = [[0, i * 0.09, 0] for i in range(1, 11)]
+                        translation_variations_down = [[0, -i * 0.05, 0] for i in range(1, 11)]
+
+                        novel_poses_up = generate_translated_poses(extrinsic_south_2, translation_variations_up)
+                        novel_poses_down = generate_translated_poses(extrinsic_south_2, translation_variations_down)
+
+                        novel_poses = novel_poses_up + novel_poses_down
+                        """
+
+                        """
+                        Use this for left and right
+                        
+                        translation_variations_left = [[-i * 0.1, 0, 0] for i in range(1, 11)]
+                        translation_variations_right = [[i * 0.1, 0, 0] for i in range(1, 11)]
+
+                        novel_poses_left = generate_translated_poses(extrinsic_south_2, translation_variations_left)
+                        novel_poses_right = generate_translated_poses(extrinsic_south_2, translation_variations_right)
+
+                        novel_poses = novel_poses_left + novel_poses_right
+                        """
+
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2,
-                            'extrinsic_matrix': extrinsic_south_2,
+                            'extrinsic_matrix': novel_poses[img_index],#extrinsic_south_2,
                             "projection_matrix": south_2_proj
                         }
                         N_time = len(image_files)
@@ -409,9 +525,70 @@ class Neural3D_NDC_Dataset(Dataset):
                         extrinsic_v[:3, :3] = extrinsic_matrix_vehicle[:3, :3].transpose()
                         extrinsic_v[:3, 3] = extrinsic_matrix_vehicle[:3, 3]
 
+                        """
+                        Use only for novel view rendering -> 
+                        
+                        translation_variations = [
+                            [0.2, 0, 0],  # Right
+                            [-0.2, 0, 0],  # Left
+                            [0, 0.2, 0],  # Up
+                            [0, -0.2, 0],  # Down
+                            [0.2, 0.2, 0],  # Right and Up
+                            [0.2, -0.2, 0],  # Right and Down
+                            [-0.2, 0.2, 0],  # Left and Up
+                            [-0.2, -0.2, 0],  # Left and Down
+                            [0, 0, 0.2],  # Forward
+                            [0, 0, -0.2],  # Backward
+                            [0.1, 0, 0],  # Slight Right
+                            [-0.1, 0, 0],  # Slight Left
+                            [0, 0.1, 0],  # Slight Up
+                            [0, -0.1, 0],  # Slight Down
+                            [0.1, 0.1, 0],  # Slight Right and Up
+                            [0.1, -0.1, 0],  # Slight Right and Down
+                            [-0.1, 0.1, 0],  # Slight Left and Up
+                            [-0.1, -0.1, 0],  # Slight Left and Down
+                            [0, 0, 0.1],  # Slight Forward
+                            [0, 0, -0.1]  # Slight Backward
+                        ]
+                        # novel_poses_vehicle = generate_translated_poses(extrinsic_v, translation_variations)
+                        """
+                        """
+                        Use for up and down movments for vehicle
+                        
+                        
+                        translation_variations_up = [[0, i * 0.09, 0] for i in range(1, 11)]
+                        translation_variations_down = [[0, -i * 0.05, 0] for i in range(1, 11)]
+
+                        novel_poses_up = generate_translated_poses(extrinsic_v, translation_variations_up)
+                        novel_poses_down = generate_translated_poses(extrinsic_v, translation_variations_down)
+
+                        novel_poses_vehicle = novel_poses_up + novel_poses_down
+                        """
+
+
+                        """
+                        Use for left and right movments for vehicle
+                        """
+
+                        translation_variations_left = [[-i * 0.1, 0, 0] for i in range(1, 11)]
+                        translation_variations_right = [[i * 0.1, 0, 0] for i in range(1, 11)]
+
+                        novel_poses_left = generate_translated_poses(extrinsic_v, translation_variations_left)
+                        novel_poses_right = generate_translated_poses(extrinsic_v, translation_variations_right)
+
+                        novel_poses_vehicle = novel_poses_left + novel_poses_right
+
+                        #novel_poses_vehicle = generate_novel_poses_infra(extrinsic_v, translation_variation=0.05, rotation_variation=0.05)
+
+
+
+
+
+
+
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_vehicle,
-                            'extrinsic_matrix': extrinsic_v,
+                            'extrinsic_matrix': novel_poses_vehicle[img_index], #extrinsic_v, #
                             "projection_matrix": vehicle_proj
                         }
                         N_time = len(image_files)
@@ -423,7 +600,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-                if dir == "cam01":  # South 2
+                if dir == "cam03":  # South 2
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
