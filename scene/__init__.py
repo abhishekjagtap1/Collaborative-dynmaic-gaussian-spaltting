@@ -58,7 +58,7 @@ class Scene:
         elif os.path.exists(os.path.join(args.source_path,"train_meta.json")):
             scene_info = sceneLoadTypeCallbacks["PanopticSports"](args.source_path)
             dataset_type="PanopticSports"
-        elif os.path.exists(os.path.join(args.source_path,"points3D_multipleview.ply")):
+        elif os.path.exists(os.path.join(args.source_path,"poses_bounds.npy")):
             scene_info = sceneLoadTypeCallbacks["MultipleView"](args.source_path)
             dataset_type="MultipleView"
         else:

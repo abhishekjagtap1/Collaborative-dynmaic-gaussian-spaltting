@@ -126,7 +126,8 @@ def fetchPly(path):
     vertices = plydata['vertex']
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
     colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
-    normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
+    normals = np.zeros((len(positions), 3))
+    #normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
     return BasicPointCloud(points=positions, colors=colors, normals=normals)
 
 def storePly(path, xyz, rgb):
@@ -439,10 +440,18 @@ def add_points(pointsclouds, xyz_min, xyz_max):
     return pointsclouds
     # breakpoint()
     # new_
+
+
+"""
+Thjis function datloader for tumtraf along with lidar init
+"""
 def readdynerfInfo(datadir,use_bg_points,eval):
     # loading all the data follow hexplane format
     # ply_path = os.path.join(datadir, "points3D_dense.ply")
-    ply_path = os.path.join(datadir, "points3D_downsample2.ply")
+    #ply_path = os.path.join(datadir, "lidar_init/points3d_south_vehilce_filtered.ply") # This gave a NAN
+    #ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #This also gave NAN
+    ply_path = os.path.join(datadir, "lidar_init/downsample_points_colouzred_distengled_scene.ply")
+
     from scene.neural_3D_dataset_NDC import Neural3D_NDC_Dataset
     train_dataset = Neural3D_NDC_Dataset(
     datadir,

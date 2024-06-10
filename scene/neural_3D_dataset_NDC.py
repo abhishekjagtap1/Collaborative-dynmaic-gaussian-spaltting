@@ -226,12 +226,12 @@ class Neural3D_NDC_Dataset(Dataset):
         sphere_scale=1.0,
     ):
         self.img_wh = (
-            int(1352 / downsample),
-            int(1014 / downsample),
+            int(1920 / downsample),
+            int(1200 / downsample),
         )  # According to the neural 3D paper, the default resolution is 1024x768
         self.root_dir = datadir
         self.split = split
-        self.downsample = 2704 / self.img_wh[0]
+        self.downsample = 1 #2704 / self.img_wh[0]
         self.is_stack = is_stack
         self.N_vis = N_vis
         self.time_scale = time_scale
@@ -244,28 +244,33 @@ class Neural3D_NDC_Dataset(Dataset):
         self.blender2opencv = np.eye(4)
         self.transform = T.ToTensor()
 
-        self.near = 0.0
-        self.far = 1.0
+        self.near = 1.0#0.0
+        self.far = 100 #Please look into it later
         self.near_far = [self.near, self.far]  # NDC near far is [0, 1.0]
         self.white_bg = False
         self.ndc_ray = True
         self.depth_data = False
 
-        self.load_meta()
+        self.load_meta(datadir)
         print(f"meta data loaded, total image:{len(self)}")
 
-    def load_meta(self):
+    def load_meta(self, datadir):
         """
-        Load meta data from the dataset.
+        Load meta data from the dataset N3D
+        """
+        """
+        Render Novel val poses is still pending please dont use the below val poses for training
         """
         # Read poses and video file paths.
         poses_arr = np.load(os.path.join(self.root_dir, "poses_bounds.npy"))
-        poses = poses_arr[:, :-2].reshape([-1, 3, 5])  # (N_cams, 3, 5)
+        #poses = poses_arr[:, :-2].reshape([-1, 3, 5])  # (N_cams, 3, 5)
+        poses = poses_arr[:, :-4].reshape([-1, 3, 5])
         self.near_fars = poses_arr[:, -2:]
         videos = glob.glob(os.path.join(self.root_dir, "cam*.mp4"))
         videos = sorted(videos)
         # breakpoint()
-        assert len(videos) == poses_arr.shape[0]
+        #assert len(videos) == poses_arr.shape[0]
+
 
         H, W, focal = poses[0, :, -1]
         focal = focal / self.downsample
@@ -294,84 +299,195 @@ class Neural3D_NDC_Dataset(Dataset):
                 poses_i_train.append(i)
         self.poses = poses[poses_i_train]
         self.poses_all = poses
-        self.image_paths, self.image_poses, self.image_times, N_cam, N_time = self.load_images_path(videos, self.split)
+        self.image_paths, self.image_poses, self.image_times, N_cam, N_time, self.depth_paths = self.load_images_path(datadir, self.split)
         self.cam_number = N_cam
         self.time_number = N_time
     def get_val_pose(self):
         render_poses = self.val_poses
         render_times = torch.linspace(0.0, 1.0, render_poses.shape[0]) * 2.0 - 1.0
         return render_poses, self.time_scale * render_times
-    def load_images_path(self,videos,split):
+    def load_images_path(self,datadir,split):
         image_paths = []
         image_poses = []
         image_times = []
+        depth_paths = []
         N_cams = 0
         N_time = 0
         countss = 300
-        for index, video_path in enumerate(videos):
-            
-            if index == self.eval_index:
-                if split =="train":
-                    continue
-            else:
-                if split == "test":
-                    continue
-            N_cams +=1
-            count = 0
-            video_images_path = video_path.split('.')[0]
-            image_path = os.path.join(video_images_path,"images")
-            video_frames = cv2.VideoCapture(video_path)
-            if not os.path.exists(image_path):
-                print(f"no images saved in {image_path}, extract images from video.")
-                os.makedirs(image_path)
-                this_count = 0
-                while video_frames.isOpened():
-                    ret, video_frame = video_frames.read()
-                    if this_count >= countss:break
-                    if ret:
-                        video_frame = cv2.cvtColor(video_frame, cv2.COLOR_BGR2RGB)
-                        video_frame = Image.fromarray(video_frame)
-                        if self.downsample != 1.0:
 
-                            img = video_frame.resize(self.img_wh, Image.LANCZOS)
-                        img.save(os.path.join(image_path,"%04d.png"%count))
+        for root, dirs, files in os.walk(datadir):
+            for dir in dirs:
+                if dir == "cam01":  # South 2
+                    N_cams += 1
+                    image_folders = os.path.join(root, dir)
+                    image_files = sorted(os.listdir(image_folders))
+                    this_count = 0
+                    image_files = image_files[:20] #hardcode to take only first 20 samples
+                    for img_file in image_files:
+                        if this_count >= countss: break
+                        img_index = image_files.index(img_file)
+                        images_path = os.path.join(image_folders, img_file)
+                        if self.depth_data:
+                            depth_folder = os.path.join(root, "cam01_depth")
+                            depth_files = sorted(os.listdir(depth_folder))
+                            depth_files = depth_files[:20]
+                            assert len(depth_files) == len(image_files)
+                            for depth_file in depth_files:
+                                depth_path = os.path.join(depth_folder, depth_file)
 
-                        # img = transform(img)
-                        count += 1
-                        this_count+=1
-                    else:
-                        break
-                    
-            images_path = os.listdir(image_path)
-            images_path.sort()
-            this_count = 0
-            for idx, path in enumerate(images_path):
-                if this_count >=countss:break
-                image_paths.append(os.path.join(image_path,path))
-                pose = np.array(self.poses_all[index])
-                R = pose[:3,:3]
-                R = -R
-                R[:,0] = -R[:,0]
-                T = -pose[:3,3].dot(R)
-                image_times.append(idx/countss)
-                image_poses.append((R,T))
-                # if self.downsample != 1.0:
-                #     img = video_frame.resize(self.img_wh, Image.LANCZOS)
-                # img.save(os.path.join(image_path,"%04d.png"%count))
-                this_count+=1
-            N_time = len(images_path)
+                        intrinsic_south_2 = np.asarray([[1315.158203125, 0.0, 962.7348338975571],
+                                                            [0.0, 1362.7757568359375, 580.6482296623581],
+                                                            [0.0, 0.0, 1.0]], dtype=np.float32)
+                        extrinsic_south_2 = np.asarray([[0.6353517, -0.24219051, 0.7332613, -0.03734626],
+                                                        [-0.7720766, -0.217673, 0.5970893, 2.5209506],
+                                                        [0.01500183, -0.9454958, -0.32528937, 0.543223],
+                                                        [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+                        south_2_proj = np.asarray([[1546.63215008, -436.92407115, -295.58362676, 1319.79271737],
+                                                   [93.20805656, 47.90351592, -1482.13403199, 687.84781276],
+                                                   [0.73326062, 0.59708904, -0.32528854, -1.30114325]],
+                                                  dtype=np.float32)
+                        image_pose_dict = {
+                            'intrinsic_matrix': intrinsic_south_2,
+                            'extrinsic_matrix': extrinsic_south_2,
+                            "projection_matrix": south_2_proj
+                        }
+                        N_time = len(image_files)
+                        image_paths.append(os.path.join(images_path))
+                        if self.depth_data:
+                            depth_paths.append(os.path.join(depth_path))
 
-                #     video_data_save[count] = img.permute(1,2,0)
-                #     count += 1
-        return image_paths, image_poses, image_times, N_cams, N_time
+                        image_times.append(float(img_index / len(image_files)))
+                        image_poses.append(image_pose_dict)
+
+                        this_count += 1
+
+                if dir == "cam02":
+                    N_cams += 1
+                    image_folders = os.path.join(root, dir)
+                    image_files = sorted(os.listdir(image_folders))
+                    metadata_folders = os.path.join(root, "vehicle_meta_data")
+                    meta_files = sorted(os.listdir(metadata_folders))
+                    assert len(meta_files) == len(image_files)
+                    image_files = image_files[:20]
+                    meta_files = meta_files[:20]
+                    for img_file, meta_file in zip(image_files, meta_files):
+                        images_path = os.path.join(image_folders, img_file)
+                        img_index = image_files.index(img_file)
+                        metadata_path = os.path.join(metadata_folders, meta_file)
+                        intrinsic_vehicle = np.asarray([[2726.55, 0.0, 685.235],
+                                                        [0.0, 2676.64, 262.745],
+                                                        [0.0, 0.0, 1.0]], dtype=np.float32)
+                        vehicle_cam_to_lidar = np.asarray([[0.12672871, 0.12377692, 0.9841849, 0.14573078],  # TBD
+                                                           [-0.9912245, -0.02180046, 0.13037732, 0.19717109],
+                                                           [0.03759337, -0.99207014, 0.11992808, -0.02214238],
+                                                           [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+                        if self.depth_data:
+                            depth_folder = os.path.join(root, "cam02_depth")
+                            depth_files = sorted(os.listdir(depth_folder))
+                            depth_files = depth_files[:20]
+                            assert len(depth_files) == len(image_files)
+                            for depth_file in depth_files:
+                                depth_path = os.path.join(depth_folder, depth_file)
+
+                        import json
+                        with open(metadata_path, 'r') as file:
+                            calib_data = json.load(file)
+                            frames = calib_data.get("openlabel", {}).get("frames", {})
+
+                            for frame_key, frame_data in frames.items():
+                                transforms = frame_data.get("frame_properties", {}).get("transforms", {})
+
+                                for transform_key, transform_data in transforms.items():
+                                    matrix = transform_data.get("transform_src_to_dst", {}).get("matrix4x4")
+
+                        vehicle_to_infra_transformation_matrix = np.array(matrix)
+                        extrinsic_matrix_vehicle = np.matmul(np.linalg.inv(vehicle_cam_to_lidar),
+                                                             np.linalg.inv(vehicle_to_infra_transformation_matrix))
+                        vehicle_proj = np.matmul(np.hstack((intrinsic_vehicle, np.zeros((3, 1), dtype=np.float32))), extrinsic_matrix_vehicle)
+                        #Vehicle transformation needs to be transposed inorder to maintaion consistentcy
+                        extrinsic_v = np.eye(4).astype(np.float32)
+                        extrinsic_v[:3, :3] = extrinsic_matrix_vehicle[:3, :3].transpose()
+                        extrinsic_v[:3, 3] = extrinsic_matrix_vehicle[:3, 3]
+
+                        image_pose_dict = {
+                            'intrinsic_matrix': intrinsic_vehicle,
+                            'extrinsic_matrix': extrinsic_v,
+                            "projection_matrix": vehicle_proj
+                        }
+                        N_time = len(image_files)
+                        image_paths.append(os.path.join(images_path))
+                        if self.depth_data:
+                            depth_paths.append(os.path.join(depth_path))
+                        image_times.append(float(img_index / len(image_files)))
+                        image_poses.append(image_pose_dict)
+
+                        this_count += 1
+
+                if dir == "cam01":  # South 2
+                    N_cams += 1
+                    image_folders = os.path.join(root, dir)
+                    image_files = sorted(os.listdir(image_folders))
+                    this_count = 0
+                    image_files = image_files[:20] #hardcode to take only first 20 samples
+                    for img_file in image_files:
+                        if this_count >= countss: break
+                        img_index = image_files.index(img_file)
+                        images_path = os.path.join(image_folders, img_file)
+                        if self.depth_data:
+                            depth_folder = os.path.join(root, "cam01_depth")
+                            depth_files = sorted(os.listdir(depth_folder))
+                            depth_files = depth_files[:20]
+                            assert len(depth_files) == len(image_files)
+                            for depth_file in depth_files:
+                                depth_path = os.path.join(depth_folder, depth_file)
+
+                        intrinsic_south_2 = np.asarray([[1315.158203125, 0.0, 962.7348338975571],
+                                                            [0.0, 1362.7757568359375, 580.6482296623581],
+                                                            [0.0, 0.0, 1.0]], dtype=np.float32)
+                        extrinsic_south_2 = np.asarray([[0.6353517, -0.24219051, 0.7332613, -0.03734626],
+                                                        [-0.7720766, -0.217673, 0.5970893, 2.5209506],
+                                                        [0.01500183, -0.9454958, -0.32528937, 0.543223],
+                                                        [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+                        south_2_proj = np.asarray([[1546.63215008, -436.92407115, -295.58362676, 1319.79271737],
+                                                   [93.20805656, 47.90351592, -1482.13403199, 687.84781276],
+                                                   [0.73326062, 0.59708904, -0.32528854, -1.30114325]],
+                                                  dtype=np.float32)
+                        image_pose_dict = {
+                            'intrinsic_matrix': intrinsic_south_2,
+                            'extrinsic_matrix': extrinsic_south_2,
+                            "projection_matrix": south_2_proj
+                        }
+                        N_time = len(image_files)
+                        image_paths.append(os.path.join(images_path))
+                        if self.depth_data:
+                            depth_paths.append(os.path.join(depth_path))
+
+                        image_times.append(float(img_index / len(image_files)))
+                        image_poses.append(image_pose_dict)
+
+                        this_count += 1
+
+        return image_paths, image_poses, image_times, N_cams, N_time, depth_paths #Use this for training gaussian spalatting on TUMTRAF
     def __len__(self):
         return len(self.image_paths)
     def __getitem__(self,index):
         img = Image.open(self.image_paths[index])
         img = img.resize(self.img_wh, Image.LANCZOS)
+        if self.depth_data:
+            depth_image = Image.open(self.depth_paths[index])
+            depth_tensor = self.transform(depth_image).float()
+            depth = (depth_tensor - depth_tensor.min()) / (depth_tensor.max() - depth_tensor.min())
+            #np.array(cv2.imread(self.depth_paths[index], cv2.IMREAD_UNCHANGED), dtype=np.float32))
+        # depth = np.load(depth_path).astype(np.float32)
+        else:
+            depth = None
 
         img = self.transform(img)
-        return img, self.image_poses[index], self.image_times[index]
+        return img, self.image_poses[index], self.image_times[index], depth
     def load_pose(self,index):
-        return self.image_poses[index]
+        pose = self.image_poses[index] #
+        extrinsic_matrix = pose['extrinsic_matrix']
+        R = extrinsic_matrix[:3, :3] #np.transpose(extrinsic_matrix[:3, :3])
+        T = extrinsic_matrix[:3, 3]
+        return R, T #self.image_poses[index]
 

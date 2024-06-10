@@ -13,7 +13,7 @@ import random
 import os, sys
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss
+from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss, nearMean_map
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -174,6 +174,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             pipe.debug = True
         images = []
         gt_images = []
+        rnd_depth = []
+        gt_depths = []
         radii_list = []
         visibility_filter_list = []
         viewspace_point_tensor_list = []
@@ -190,7 +192,23 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             radii_list.append(radii.unsqueeze(0))
             visibility_filter_list.append(visibility_filter.unsqueeze(0))
             viewspace_point_tensor_list.append(viewspace_point_tensor)
+
+        """
+        Adding Depth guided supervision loss
         
+        NOTE: Carefull with the deoth batch for the momemnt keeping batch size 1
+        """
+        rendered_depth = render_pkg["depth"]
+        rnd_depth.append(rendered_depth.unsqueeze(0))
+
+        #if scene.dataset_type != "PanopticSports":
+         #   gt_depth = viewpoint_cam.depth.cuda()
+        #else:
+         #   gt_depth = viewpoint_cam['depth'].cuda()
+        #gt_depths.append(gt_depth.unsqueeze(0))
+
+
+
 
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
@@ -200,11 +218,27 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # breakpoint()
         Ll1 = l1_loss(image_tensor, gt_image_tensor[:,:3,:,:])
 
+        #depth_tensor = torch.cat(rnd_depth,0)
+        #gt_depth_tensor = torch.cat(gt_depths,0)
+
+        #depth_loss = l1_loss(depth_tensor, gt_depth_tensor[:,:3,:,:])
+        #depth_weight_scale = 0.5
+
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
         # norm
-        
+        """
+        Dumb way to supervise depth loss |loss = 0.8 *Ll1 + 0.2 * depth_loss
+        """
+
+        #loss = 0.8 *Ll1 + 0.2 * depth_loss
 
         loss = Ll1
+        #loss += depth_weight_scale * depth_loss
+        """
+        Depth regularizer
+        """
+        #nearDepthMean_map = nearMean_map(depth_tensor.detach(), gt_image_tensor[:,:3,:,:], kernelsize=3)
+        #loss = loss + l2_loss(nearDepthMean_map, depth_tensor) * 1.0
         if stage == "fine" and hyper.time_smoothness_weight != 0:
             # tv_loss = 0
             tv_loss = gaussians.compute_regulation(hyper.time_smoothness_weight, hyper.l1_time_planes, hyper.plane_tv_weight)
@@ -404,7 +438,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[3000,7000,14000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[ 14000, 20000, 30_000, 45000, 60000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[ 3000, 5000, 7000, 10000, 14000, 20000, 30_000, 45000, 60000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
