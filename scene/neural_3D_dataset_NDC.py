@@ -183,7 +183,7 @@ def process_videos(videos, skip_index, img_wh, downsample, transform, num_worker
     return all_imgs
 
 
-def generate_novel_poses_infra(extrinsic_matrix, num_poses=20, translation_variation=0.1, rotation_variation=0.1):
+def generate_novel_poses_infra(extrinsic_matrix, num_poses=30, translation_variation=0.1, rotation_variation=0.1):
     def perturb_matrix(matrix, translation_variation, rotation_variation):
         # Generate random small translations
         translation_perturbation = np.random.uniform(-translation_variation, translation_variation, size=(3,))
@@ -283,6 +283,65 @@ def generate_spiral_poses_vehicle(extrinsic_matrix, num_poses=20, translation_st
 
         poses.append(perturbed_matrix)
     return poses
+
+"""
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+"Here we go again", i want to go to ECCV2025, Render novel poses for visualization -June 10 2024
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+"""
+
+
+def generate_zoom_extrinsics(initial_extrinsic, steps=30, zoom_distance=1.0, vehicle=bool):
+    # Extract the rotation matrix and translation vector
+    rotation_matrix = initial_extrinsic[:3, :3]
+    translation_vector = initial_extrinsic[:3, 3]
+
+    # Get the camera viewing direction (negative z-axis in camera space)
+    #viewing_direction = rotation_matrix[:, 2]  # Third column of the rotation matrix
+    if vehicle:
+        viewing_direction = rotation_matrix[:, 0]
+    else:
+        viewing_direction = rotation_matrix[:, 1]
+
+
+    # Create a list to hold the new extrinsic matrices
+    extrinsics_list = []
+
+    # Generate new extrinsic matrices by moving the camera along the viewing direction
+    for i in range(steps):
+        # Calculate the new translation vector
+        new_translation_vector = translation_vector + (i / steps) * zoom_distance * viewing_direction
+
+        # Construct the new extrinsic matrix
+        new_extrinsic = np.eye(4, dtype=np.float32)
+        new_extrinsic[:3, :3] = rotation_matrix
+        new_extrinsic[:3, 3] = new_translation_vector
+
+        # Append the new extrinsic matrix to the list
+        extrinsics_list.append(new_extrinsic)
+
+    return extrinsics_list
+
+
+def reorder_extrinsic_matrices(image_poses):
+    # Split the list into the first 30 and the remaining elements
+
+    first_30 = image_poses[:30]
+    remaining = image_poses[30:]
+
+    #first_30 = image_poses[:20]
+    #remaining = image_poses[20:]
+
+    # Reverse the first 30 elements
+    first_30_reversed = first_30[::-1]
+    #remaining = remaining[::-1]
+
+    # Concatenate the reversed first 30 elements with the remaining elements
+    reordered_poses = first_30_reversed + remaining
+    #reordered_poses = first_30_reversed + remaining_reversed -> Not good
+
+    return reordered_poses
 
 
 class Neural3D_NDC_Dataset(Dataset):
@@ -400,7 +459,8 @@ class Neural3D_NDC_Dataset(Dataset):
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
                     this_count = 0
-                    image_files = image_files[:20] #hardcode to take only first 20 samples
+                    #image_files = image_files[:20] #hardcode to take only first 20 samples
+                    image_files = image_files[20:50]
                     for img_file in image_files:
                         if this_count >= countss: break
                         img_index = image_files.index(img_file)
@@ -427,9 +487,9 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         """
                         Use this only for rendering novel poses
-                         """
+                        """
 
-                        novel_poses = generate_novel_poses_infra(extrinsic_south_2)
+                        novel_poses = generate_novel_poses_infra(extrinsic_south_2, num_poses= 30, translation_variation=0.05, rotation_variation=0.1)
                         #novel_poses = get_spiral(poses, self.near_fars, N_views=N_views)
 
                         #for i, pose in enumerate(novel_poses):
@@ -462,9 +522,22 @@ class Neural3D_NDC_Dataset(Dataset):
                         novel_poses = novel_poses_left + novel_poses_right
                         """
 
+                        """
+                        dumb hack
+                        """
+
+                        # Generate 30 extrinsic matrices with a zoom distance of 1.0 units
+                        zoom_extrinsics = generate_zoom_extrinsics(extrinsic_south_2, steps=30, zoom_distance=5.0, vehicle=False)
+                        #zoom_extrinsics = generate_zoom_extrinsics(extrinsic_south_2, steps=20, zoom_distance=5.0, vehicle=False)
+                        update_extrinsics = zoom_extrinsics[img_index]
+                        print("I am using zoomed ones")
+
+
+
+
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2,
-                            'extrinsic_matrix': novel_poses[img_index],#extrinsic_south_2,
+                            'extrinsic_matrix': extrinsic_south_2, #update_extrinsics, # #novel_poses[img_index], #
                             "projection_matrix": south_2_proj
                         }
                         N_time = len(image_files)
@@ -484,8 +557,11 @@ class Neural3D_NDC_Dataset(Dataset):
                     metadata_folders = os.path.join(root, "vehicle_meta_data")
                     meta_files = sorted(os.listdir(metadata_folders))
                     assert len(meta_files) == len(image_files)
-                    image_files = image_files[:20]
-                    meta_files = meta_files[:20]
+                    #image_files = image_files[:20]
+                    #meta_files = meta_files[:20]
+
+                    image_files = image_files[20:50]
+                    meta_files = meta_files[20:50]
                     for img_file, meta_file in zip(image_files, meta_files):
                         images_path = os.path.join(image_folders, img_file)
                         img_index = image_files.index(img_file)
@@ -524,6 +600,10 @@ class Neural3D_NDC_Dataset(Dataset):
                         extrinsic_v = np.eye(4).astype(np.float32)
                         extrinsic_v[:3, :3] = extrinsic_matrix_vehicle[:3, :3].transpose()
                         extrinsic_v[:3, 3] = extrinsic_matrix_vehicle[:3, 3]
+                        if img_index==0:
+                            save_first_pose = extrinsic_v
+
+
 
                         """
                         Use only for novel view rendering -> 
@@ -554,29 +634,33 @@ class Neural3D_NDC_Dataset(Dataset):
                         """
                         """
                         Use for up and down movments for vehicle
+                        """
                         
                         
-                        translation_variations_up = [[0, i * 0.09, 0] for i in range(1, 11)]
-                        translation_variations_down = [[0, -i * 0.05, 0] for i in range(1, 11)]
+                        translation_variations_up = [[0, i * 0.05, 0] for i in range(1, 31)]
+                        #translation_variations_down = [[0, -i * 0.05, 0] for i in range(1, 16)]
 
                         novel_poses_up = generate_translated_poses(extrinsic_v, translation_variations_up)
-                        novel_poses_down = generate_translated_poses(extrinsic_v, translation_variations_down)
+                        #novel_poses_down = generate_translated_poses(extrinsic_v, translation_variations_down)
 
-                        novel_poses_vehicle = novel_poses_up + novel_poses_down
-                        """
+                        novel_poses_vehicle = novel_poses_up #+ novel_poses_down
 
+                        zoom_extrinsics_ve= generate_zoom_extrinsics(save_first_pose, steps=30, zoom_distance=2.0)
+                        #zoom_extrinsics_ve = generate_zoom_extrinsics(save_first_pose, steps=20, zoom_distance=1.0, vehicle=True)
+                        update_extrinsics_ve = zoom_extrinsics_ve[img_index]
 
                         """
                         Use for left and right movments for vehicle
+                        
+
+                        translation_variations_left = [[-i * 0.1, 0, 0] for i in range(1, 31)]
+                        translation_variations_right = [[i * 0.1, 0, 0] for i in range(1, 31)]
+
+                        #novel_poses_left = generate_translated_poses(extrinsic_v, translation_variations_left)
+                        #novel_poses_right = generate_translated_poses(extrinsic_v, translation_variations_right)
+
+                        novel_poses_vehicle = novel_poses_right #+novel_poses_left #
                         """
-
-                        translation_variations_left = [[-i * 0.1, 0, 0] for i in range(1, 11)]
-                        translation_variations_right = [[i * 0.1, 0, 0] for i in range(1, 11)]
-
-                        novel_poses_left = generate_translated_poses(extrinsic_v, translation_variations_left)
-                        novel_poses_right = generate_translated_poses(extrinsic_v, translation_variations_right)
-
-                        novel_poses_vehicle = novel_poses_left + novel_poses_right
 
                         #novel_poses_vehicle = generate_novel_poses_infra(extrinsic_v, translation_variation=0.05, rotation_variation=0.05)
 
@@ -588,7 +672,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_vehicle,
-                            'extrinsic_matrix': novel_poses_vehicle[img_index], #extrinsic_v, #
+                            'extrinsic_matrix': extrinsic_v, #update_extrinsics_ve, #novel_poses_vehicle[img_index], #
                             "projection_matrix": vehicle_proj
                         }
                         N_time = len(image_files)
@@ -644,7 +728,8 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-        return image_paths, image_poses, image_times, N_cams, N_time, depth_paths #Use this for training gaussian spalatting on TUMTRAF
+                #image_poses = reorder_extrinsic_matrices(image_poses)
+        return image_paths, image_poses,  image_times, N_cams, N_time, depth_paths #Use this for training gaussian spalatting on TUMTRAF image_poses,
     def __len__(self):
         return len(self.image_paths)
     def __getitem__(self,index):
@@ -660,6 +745,7 @@ class Neural3D_NDC_Dataset(Dataset):
             depth = None
 
         img = self.transform(img)
+
         return img, self.image_poses[index], self.image_times[index], depth
     def load_pose(self,index):
         pose = self.image_poses[index] #

@@ -13,7 +13,7 @@ def create_side_by_side_video(folder_path, output_video_file, frame_rate=30):
     height, width, _ = first_image.shape
 
     # Create a VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')#
     out = cv2.VideoWriter(output_video_file, fourcc, frame_rate, (width * 2, height))
 
     for i in range(20):
@@ -39,8 +39,9 @@ folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/novel_v
 #folder_path ="/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/novel_view_rendering/Novel_view_random_rotation_translation/good_left_right_0.2/ours_5000/gt" #ground_truth
 output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/Render_results_dynamic/novel_views_up_down_0/side_by_side_video.mp4"
 """
-#folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/Best_novel_view_14k/left_right_both/ours_10000/renders" #Left__right_novel_view_rendering
-#folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/Best_novel_view_14k/vehicle_left_right_infra_random/renders" #up_down
-folder_path ="/home/uchihadj/ECCV_workshop/4DGaussians/output/Best_novel_view_14k/up_and_down/renders" #ground_truth
-output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/Best_novel_view_14k/slow_videos/up_down_view_snthesis/side_by_side_up_down_motion_video.mp4"
+#folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/Second_part_trained_and_rendered_novel_views/train/ours_14000/renders" #Left__right_novel_view_rendering
+folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/First_part_trained_rendered_novel_views/train/ours_10000/renders" #Pakka lo
+#folder_path ="/home/uchihadj/ECCV_workshop/4DGaussians/output/High_rendering/renders" #ground_truth
+output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/First_part_trained_rendered_novel_views/train/ours_10000/side_by_side_zoom_video.mp4"
+#output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/Second_part_trained_and_rendered_novel_views/train/ours_14000/side_by_side_zoom_video.mp4"
 create_side_by_side_video(folder_path, output_video_file)
