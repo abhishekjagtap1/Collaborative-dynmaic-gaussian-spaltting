@@ -17,7 +17,7 @@
     |-> Hack 2 - Scaling loss by a factor of 1000 to avoid samll number convergence (Need to check if this works)
     |-> Found out tv_loss is causing the NAN thanks to hacck 2
     |-> Probably time_regularization is not proper
-    --------------------------------------------------------------------------------------------------
+    
     Attempt 2:
     |-> Set no_dr and no_ds to true -> arguments/__init__.py to check if nan is avoided by using this -> This works No NAN but the PSNR drops abrubtically and never recovers
     set render_process to false for a faster training
