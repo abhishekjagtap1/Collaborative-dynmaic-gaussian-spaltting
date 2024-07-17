@@ -33,8 +33,9 @@ class FourDGSdataset(Dataset):
                 F = w2c['intrinsic_matrix']
                 depth = None
             except:
-                print("Wrong loop for loading Data")
+                #print("Wrong loop for loading Data")
                 caminfo = self.dataset[index]
+                print("DATA Index ", self.dataset[index])
                 image = caminfo.image
                 R = caminfo.R
                 T = caminfo.T

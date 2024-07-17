@@ -44,4 +44,10 @@ folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/First_p
 #folder_path ="/home/uchihadj/ECCV_workshop/4DGaussians/output/High_rendering/renders" #ground_truth
 output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/First_part_trained_rendered_novel_views/train/ours_10000/side_by_side_zoom_video.mp4"
 #output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/Second_part_trained_and_rendered_novel_views/train/ours_14000/side_by_side_zoom_video.mp4"
+
+#folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/Second_part_trained_and_rendered_novel_views/train/ours_14000/renders" #Left__right_novel_view_rendering
+folder_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/dynamic_new_scene_please_work/train/ours_7000/gt" #Pakka lo
+#folder_path ="/home/uchihadj/ECCV_workshop/4DGaussians/output/High_rendering/renders" #ground_truth
+output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/dynamic_new_scene_please_work/train/ours_7000/gt/side_by_side_zoom_video.mp4"
+#output_video_file = "/home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/Second_part_trained_and_rendered_novel_views/train/ours_14000/side_by_side_zoom_video.mp4"
 create_side_by_side_video(folder_path, output_video_file)
