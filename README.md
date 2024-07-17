@@ -1,3 +1,61 @@
+## Important Notes:
+
+1) Dont use projection matrix given by TUmtraf it fucks up the entire densification process, as no lidar points will be visible 
+    in the projection view making gaussian splat initilaztaion useless 
+2) I have used extrinsics for south_2 ny multiplying with base -> extrinsic_matrix_lidar_to_camera_south_2 = np.matmul(transformation_matrix_base_to_camera_south_2, transformation_matrix_lidar_to_base_south_2) 
+    |-> as a result i observe the point cloud rotated and translated in a wrong way its the same for vehicle and south_1 -> see outputs/multiview/less_images_2_trail_coarse train render
+    |-> atleast i have few points in projection view as a result gaussian splats densify (it does so a little late)
+    |-> To acheive a proper 3D geometric with geo-consitency splats, correct extrinsics matrix conversion between sensors need to performed (Tried Sanaths and Lei and mine conversion until now)
+3) For now as of May -13 -> FOV is hardcoded need to update data-parsing pipeline to correctly handle it
+4) Reset dataloader into random dataloader -> Dont know what is causing this (Might be effecting my training time or giivng me nan or fucking my SIBR viewerv for visualizing
+    |-> If i use --configs arguments/hypernerf/default.py for training -> i fix the issue of random dataloader (Dont know how but works, will check training parameters later)
+    |-> if you comment out datalaoder= true in arguments/hypernerf/default.py:13 -> probably it fixes the issue
+5) Until 3000 iter -> Static gaussian splats works properly with a PSNR of upto 27
+6) As soon as it starts for includomg time render dine stage and densifying dynamic gaussian that is as soon as 3000 to 15000 iter begin i end up with a NAN at 180th iter now at 500th iter
+    |-> May 13th - still trying to figure what is causing this (NAN to occur at exactly 500th iter)
+    |-> Hack - skiip and change loss formaula for that iter - it does not work since in the next steps, continues and giassian densifyication points or shape changes as it is not uodated
+    |-> Hack 2 - Scaling loss by a factor of 1000 to avoid samll number convergence (Need to check if this works)
+    |-> Found out tv_loss is causing the NAN thanks to hacck 2
+    |-> Probably time_regularization is not proper
+    --------------------------------------------------------------------------------------------------
+    Attempt 2:
+    |-> Set no_dr and no_ds to true -> arguments/__init__.py to check if nan is avoided by using this -> This works No NAN but the PSNR drops abrubtically and never recovers
+    set render_process to false for a faster training
+    -> scene/deformation.py:120 this is important -> how to make increase PSNR and what happens with no_ds and no_dr
+    -> initial understanding the bounds of the scene might be causing the problem   
+
+    Attempt 3:
+    |-> trying using only two view -> to avoid deforamtion problem along scaling and rotation 
+    |-> arguments/hypernerf/default.py:20 chaged course iter to 200 and batch size
+    |-> gaussian_renderer/__init__.py:86 changed 
+    |-> Is nan caused the static gaussian are not trained properly when going for finstage
+    |-> is my val poses 300 too much
+    |-> I get NAN because of scene/hexplane.py:152 -> caused by boounds 
+
+7) SIBR viewver now not working as a result cannot even visualize training process (Making my life more difficult)
+    |-> I might have been using the cirrupted SIBR built app as i am just copying it from my previous repos
+    |-> A fresh install of SIBR viewerv with dynamic rendering support need to be configured
+
+
+Coupling Lidar and Camera Tightly for gaussian init
+1) |-> /home/uchihadj/CVPR_2025/4DGaussians/arguments/multipleview/perfect_lidar_and_south_camera_init.jpg -> Using camera_to_lidar_extrinsics at scene/multipleview_dataset.py:111 i get proper alignment 
+2) |-> please do the same for south_1 and vehicle 
+3) Best progress i have made all day |-> please use /home/uchihadj/CVPR_2025/4DGaussians/output/multipleview/SIBR_viewer this as lidar based gaussian for infrastructure sensors
+4) Start debugging nan by solving roattion and translation errors in the daza loading a bauckup of this momemt is kept at backup_multiview_alligned_lidar_infra.py
+
+5)NAN is caused by transformation errors from previous code hope this script now works -> No nan when using two infra and updated pose in video_cams
+
+PS: when will islve all this problem
+
+Projection_matrix np.eye gives 
+
+
+## ECCV Benchmarking Time
+
+Use getprojectionmatrix2 for training and evaluation -> Update None Type error whenm opening SIBR viewer using this setting
+
+Do not Downsample points instead reduce the bounds thats it and use point painting of the same lidar not a general one
+
 
 
 ## Environmental Setups
