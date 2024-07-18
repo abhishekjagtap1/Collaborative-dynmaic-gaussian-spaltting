@@ -3,6 +3,7 @@
 
 - Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
 - Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one.
+  
 
 ##  Results
 
@@ -29,6 +30,7 @@
 3) **Benchmark our model performance on Nuscenes** - Pending
 4) **Visulize With and Without collaboration results** - Under Training
 5)  **How to avoid floaters when visulizing** - Crop or remove gaussian outliers using some post-processing scripts
+6)  **How to Improve Dynamic gaussian performace:** Currently training is done only for 14K iteration, Need to increase to 20K and hope my ```scene/deforamtion.py``` does not throw any NAN errors
 
 
 ## Environmental Setups
