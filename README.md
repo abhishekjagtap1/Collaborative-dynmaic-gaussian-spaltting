@@ -75,7 +75,7 @@ Note: ```utils/Initialization_utils``` is used to preprocess the lidar point clo
 Run 
 ```python train.py -s  data/TUMTRAF_Scene_1/ --port 6018 --expname "ECCV_2025/less_dynamic_scene_without_collaboration" --configs arguments/dynerf/default.py  --debug_from 170 --checkpoint_iterations 3000```
 
-### Story of my life: Notes useful for training since my code is not reproducible straight away (Hardcoded hacks at many files)
+### Story of my life: Insights useful for training (Most of the bugs and errors has been rectified)
 
 1) **Projection Matrix:**
     - Don't use the projection matrix given by TUmtraf as it messes up the entire densification process. No LiDAR points will be visible in the projection view, making Gaussian splat initialization useless.
