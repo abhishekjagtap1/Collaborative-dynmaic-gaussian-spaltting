@@ -75,6 +75,11 @@ def getProjectionMatrix2(znear, zfar, K, W, H):
     fy = K[1, 1]
     cx = K[0, 2]
     cy = K[1, 2]
+    #print(fx, fy, cx, cy)
+    """
+    For Vehicle Fovx whenm redenring via SIBR viewer is FovY=0.4332118476460673, FovX=0.6770769093235088, -> dont use but keep for refernce
+    """
+
     top = znear * cy / fy
     bottom = -znear * (H - cy) / fy
     right = znear * (W - cx) / fx

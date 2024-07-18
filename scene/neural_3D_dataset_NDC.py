@@ -628,7 +628,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
         for root, dirs, files in os.walk(datadir):
             for dir in dirs:
-                if dir == "cam01":  # South 2
+                if dir == "cam04":  # South 2
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -745,11 +745,36 @@ class Neural3D_NDC_Dataset(Dataset):
                                [0.0000000e+00, 0.0000000e+00, 0.0000000e+00, 1.0000000e+00]],
                               dtype=np.float32)
 
-                        #intermediate_matrices = compute_intermediate_matrices(E1, E2, num_intermediates=len(image_files))
-                        #intermediate_matrices = generate_intermediate_posesshortest(E1, E2, num_intermediates=len(image_files))
+                        """
+                        Intermediate poses for south2 and vehicle for Less dynmaic scene
+                        """
+                        E_dynamic =  np.array([
+                                    [ 1.9375929e-01,  1.5485874e-01,  9.6874940e-01, -5.4834819e-01],
+                                    [-9.8104781e-01,  3.2331135e-02,  1.9105035e-01, -5.0577650e+00],
+                                    [-1.7348743e-03, -9.8740792e-01,  1.5818821e-01,  9.9938498e+00],
+                                    [ 0.0000000e+00,  0.0000000e+00,  0.0000000e+00,  1.0000000e+00]
+                                        ], dtype=np.float32)
+
+                        """
+                        Broken view due to different intrinsic matrix from one vie to another
+                        Attempt 1 hack -> Reverse the intrinsic matrix usage 
+                        Note: Awesome -> Broken view during Novel view rendering is due to change in intrinsic matrix , Attempt 1 works but need finetuning Check Less_dynamic scene output
+                        
+                        """
+                        intrinsic_vehicle = np.asarray([[2726.55, 0.0, 685.235],
+                                                        [0.0, 2676.64, 262.745],
+                                                        [0.0, 0.0, 1.0]], dtype=np.float32)
+
+                        intermediate_matrices = compute_intermediate_matrices(E2, E_dynamic, num_intermediates=len(image_files))
+                        #intermediate_matrices = generate_intermediate_posesshortest(E1, E_dynamic, n_poses=len(image_files))
 
                         #intermediate_matrices = compute_intermediate_matrices_novel(E2, E1, num_intermediates=20)
-                        #update_inter = intermediate_matrices[img_index]
+                        update_inter = intermediate_matrices[img_index]
+
+                        if img_index < 30:
+                            intrinsic_matrix_for_rendering = intrinsic_south_2
+                        else:
+                            intrinsic_matrix_for_rendering = intrinsic_vehicle
 
 
 
@@ -757,8 +782,8 @@ class Neural3D_NDC_Dataset(Dataset):
 
 
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_south_2,
-                            'extrinsic_matrix': extrinsic_south_2, #update_inter, # #novel_poses[img_index], # #update_extrinsics, #
+                            'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle, #
+                            'extrinsic_matrix': extrinsic_south_2, #update_inter, #update_extrinsics, # #novel_poses[img_index], # #
                             "projection_matrix": south_2_proj
                         }
                         N_time = len(image_files)
@@ -845,6 +870,7 @@ class Neural3D_NDC_Dataset(Dataset):
                         extrinsic_v = np.eye(4).astype(np.float32)
                         extrinsic_v[:3, :3] = extrinsic_matrix_vehicle[:3, :3].transpose()
                         extrinsic_v[:3, 3] = extrinsic_matrix_vehicle[:3, 3]
+
                         if img_index==0:
                             save_first_pose = extrinsic_v
 
@@ -880,6 +906,7 @@ class Neural3D_NDC_Dataset(Dataset):
                         """
                         Use for up and down movments for vehicle
                         """
+                        #print(len(image_files))
                         
                         
                         #translation_variations_up = [[0, i * 0.9, 0] for i in range(1, 21)]
@@ -937,13 +964,37 @@ class Neural3D_NDC_Dataset(Dataset):
                                [0.0000000e+00, 0.0000000e+00, 0.0000000e+00, 1.0000000e+00]],
                               dtype=np.float32)
 
-                        intermediate_matrices = compute_intermediate_matrices(E3,E2, num_intermediates=len(image_files))
+                        """
+                        Intermediate poses for south2 and vehicle for Less dynmaic scene
+                        """
+                        E_dynamic =  np.array([
+                                    [ 1.9375929e-01,  1.5485874e-01,  9.6874940e-01, -5.4834819e-01],
+                                    [-9.8104781e-01,  3.2331135e-02,  1.9105035e-01, -5.0577650e+00],
+                                    [-1.7348743e-03, -9.8740792e-01,  1.5818821e-01,  9.9938498e+00],
+                                    [ 0.0000000e+00,  0.0000000e+00,  0.0000000e+00,  1.0000000e+00]
+                                        ], dtype=np.float32)
+                        """
+                        Broken view due to different intrinsic matrix from one vie to another
+                        Attempt 1 hack -> Reverse the intrinsic matrix usage 
+
+                        """
+
+                        intrinsic_south_2 = np.asarray([[1315.158203125, 0.0, 962.7348338975571],
+                                                        [0.0, 1362.7757568359375, 580.6482296623581],
+                                                        [0.0, 0.0, 1.0]], dtype=np.float32)
+
+                        intermediate_matrices = compute_intermediate_matrices(E_dynamic,E2, num_intermediates=len(image_files))
                         #intermediate_matrices = compute_intermediate_matrices_novel(E1, E2, num_intermediates=20)
                         update_inter_veh = intermediate_matrices[img_index]
+
+                        if img_index < 15:
+                            intrinsic_matrix_for_rendering = intrinsic_vehicle
+                        else:
+                            intrinsic_matrix_for_rendering = intrinsic_south_2
                         
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_vehicle,
-                            'extrinsic_matrix': extrinsic_v, #update_extrinsics_ve, #update_inter_veh, # , novel_poses_vehicle[img_index], # #
+                            'intrinsic_matrix': intrinsic_vehicle,#intrinsic_matrix_for_rendering, #intrinsic_south_2, #
+                            'extrinsic_matrix': extrinsic_v, # update_inter_veh,#update_extrinsics_ve, # , novel_poses_vehicle[img_index], # #
                             "projection_matrix": vehicle_proj
                         }
                         N_time = len(image_files)

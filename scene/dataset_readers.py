@@ -449,14 +449,14 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     # loading all the data follow hexplane format
     # ply_path = os.path.join(datadir, "points3D_dense.ply")
     #ply_path = os.path.join(datadir, "lidar_init/points3d_south_vehilce_filtered.ply") # This gave a NAN
-    #ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #this didnt give nan for part 1 -> after 13960 iter nan (most important )
+    ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #this didnt give nan for part 1 -> after 13960 iter nan (most important )
     #ply_path = os.path.join(datadir, "lidar_init/downsample_points_colouzred_distengled_scene.ply") #this gives Nan after 5100 iterations
 
 
     """
     Downasmpled points indha accuracy kami agtha idjhiya so i use raw points
     """
-    ply_path = "/home/uchihadj/CVPR_2025/4DGaussians/utils/abbhi_utils/south_2_vehicle_scene_non_overlap_sientangled.ply"
+    #ply_path = "/home/uchihadj/CVPR_2025/4DGaussians/utils/abbhi_utils/south_2_vehicle_scene_non_overlap_sientangled.ply"
 
     from scene.neural_3D_dataset_NDC import Neural3D_NDC_Dataset
     train_dataset = Neural3D_NDC_Dataset(

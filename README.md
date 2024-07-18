@@ -1,4 +1,81 @@
-# Important Notes:
+
+## ECCV Benchmarking Time
+
+- Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
+- Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one.
+
+##  Results
+
+### Ground Truth Video
+![GT Video](assets/GT_two_agents.gif)
+
+### 3D Reconstruction Video
+![3D Reconstruction Video](assets/3DReconstruction_video.gif)
+
+### Novel View Synthesis Showing Collaboration Video
+![Novel View Synthesis Showing Collaboration](assets/Novel_view_showing_collboration.gif)
+
+### Novel View Synthesis [Left - Infrastructure View, Right - Vehicle trying to view left side of the scene]
+![Novel View Synthesis Showing Collaboration](assets/Novel_view_using_infrastructure.gif)
+
+# Recent Updates
+
+1) **Broken View Fixed:**
+   - For Rendering a 3D scene from different agents, camera intrinsics needs to be adapted accordingly, as different agents have different intrinsic matrix
+   - Dumb way to fix is by - changing intrinsic matrix via image_index - Works for now 
+
+2) **How to accurately measure novel view synthesis results** - Benchmark LPIPS and PSNR and other metric using different poses
+   - Currently working on it
+3) **Benchmark our model performance on Nuscenes** - Pending
+4) **Visulize With and Without collaboration results** - Under Training
+5)  **How to avoid floaters when visulizing** - Crop or remove gaussian outliers using some post-processing scripts
+
+
+## Environmental Setups
+
+Please follow the [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting) to install the relative packages.
+
+```bash
+conda create -n Gaussians4D python=3.7 
+conda activate Gaussians4D
+
+pip install -r requirements.txt
+pip install -e submodules/depth-diff-gaussian-rasterization
+pip install -e submodules/simple-knn
+```
+
+In our environment, we use pytorch=1.13.1+cu116.
+
+## Data Preparation -TUMTRAF 
+
+
+**For training on TUMTRAF scenes:**
+If you want to train on TUMTRAf, Download the data from https://innovation-mobility.com/en/project-providentia/a9-dataset/ 
+
+Arrange the number of agents accordingly
+```
+├── data
+|   | multipleview
+│     | TUMTRAF_Scene_1 
+│   	  | V2X_Agent_infra-01
+|     		  ├── frame_00001.jpg
+│     		  ├── frame_00002.jpg
+│     		  ├── ...
+│   	  | V2X_Agent_ego_cav-01
+│     		  ├── frame_00001.jpg
+│     		  ├── frame_00002.jpg
+│     		  ├── ...
+│   	  | ...
+```
+Refer to heavily documented code at ```scene/neural_3D_dataset_NDC.py:500 ``` for loading data from different agents along with their poses.
+
+Note: Calib/Poses are used from TUMTRAF dataset folder
+Note: ```utils/Initialization_utils``` is used to preprocess the lidar point cloud for initialization
+
+Run 
+```python train.py -s  data/TUMTRAF_Scene_1/ --port 6018 --expname "ECCV_2025/less_dynamic_scene_without_collaboration" --configs arguments/dynerf/default.py  --debug_from 170 --checkpoint_iterations 3000```
+
+### Story of my life: Notes useful for training since my code is not reproducible straight away (Hardcoded hacks at many files)
 
 1) **Projection Matrix:**
     - Don't use the projection matrix given by TUmtraf as it messes up the entire densification process. No LiDAR points will be visible in the projection view, making Gaussian splat initialization useless.
@@ -64,65 +141,6 @@
 
 **PS:** When will I solve all this problem?
 
-
-## ECCV Benchmarking Time
-
-- Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
-- Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one.
-
-
-## Environmental Setups
-
-Please follow the [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting) to install the relative packages.
-
-```bash
-conda create -n Gaussians4D python=3.7 
-conda activate Gaussians4D
-
-pip install -r requirements.txt
-pip install -e submodules/depth-diff-gaussian-rasterization
-pip install -e submodules/simple-knn
-```
-
-In our environment, we use pytorch=1.13.1+cu116.
-
-## Data Preparation
-
-**For synthetic scenes:**
-The dataset provided in [D-NeRF](https://github.com/albertpumarola/D-NeRF) is used. You can download the dataset from [dropbox](https://www.dropbox.com/s/0bf6fl0ye2vz3vr/data.zip?dl=0).
-
-**For real dynamic scenes:**
-The dataset provided in [HyperNeRF](https://github.com/google/hypernerf) is used. You can download scenes from [Hypernerf Dataset](https://github.com/google/hypernerf/releases/tag/v0.1) and organize them as [Nerfies](https://github.com/google/nerfies#datasets). 
-
-Meanwhile, [Plenoptic Dataset](https://github.com/facebookresearch/Neural_3D_Video) could be downloaded from their official websites. To save the memory, you should extract the frames of each video and then organize your dataset as follows.
-
-```
-├── data
-│   | dnerf 
-│     ├── mutant
-│     ├── standup 
-│     ├── ...
-│   | hypernerf
-│     ├── interp
-│     ├── misc
-│     ├── virg
-│   | dynerf
-│     ├── cook_spinach
-│       ├── cam00
-│           ├── images
-│               ├── 0000.png
-│               ├── 0001.png
-│               ├── 0002.png
-│               ├── ...
-│       ├── cam01
-│           ├── images
-│               ├── 0000.png
-│               ├── 0001.png
-│               ├── ...
-│     ├── cut_roasted_beef
-|     ├── ...
-```
-
 **For multipleviews scenes:**
 If you want to train your own dataset of multipleviews scenes,you can orginize your dataset as follows:
 
@@ -169,35 +187,8 @@ You need to ensure that the data folder is orginized as follows after running mu
 
 ## Training
 
-For training synthetic scenes such as `bouncingballs`, run
 
-```
-python train.py -s data/dnerf/bouncingballs --port 6017 --expname "dnerf/bouncingballs" --configs arguments/dnerf/bouncingballs.py 
-```
-
-For training dynerf scenes such as `cut_roasted_beef`, run
-```python
-# First, extract the frames of each video.
-python scripts/preprocess_dynerf.py --datadir data/dynerf/cut_roasted_beef
-# Second, generate point clouds from input data.
-bash colmap.sh data/dynerf/cut_roasted_beef llff
-# Third, downsample the point clouds generated in the second step.
-python scripts/downsample_point.py data/dynerf/cut_roasted_beef/colmap/dense/workspace/fused.ply data/dynerf/cut_roasted_beef/points3D_downsample2.ply
-# Finally, train.
-python train.py -s data/dynerf/cut_roasted_beef --port 6017 --expname "dynerf/cut_roasted_beef" --configs arguments/dynerf/cut_roasted_beef.py 
-```
-For training hypernerf scenes such as `virg/broom`: Pregenerated point clouds by COLMAP are provided [here](https://drive.google.com/file/d/1fUHiSgimVjVQZ2OOzTFtz02E9EqCoWr5/view). Just download them and put them in to correspond folder, and you can skip the former two steps. Also, you can run the commands directly.
-
-```python
-# First, computing dense point clouds by COLMAP
-bash colmap.sh data/hypernerf/virg/broom2 hypernerf
-# Second, downsample the point clouds generated in the first step. 
-python scripts/downsample_point.py data/hypernerf/virg/broom2/colmap/dense/workspace/fused.ply data/hypernerf/virg/broom2/points3D_downsample2.ply
-# Finally, train.
-python train.py -s  data/hypernerf/virg/broom2/ --port 6017 --expname "hypernerf/broom2" --configs arguments/hypernerf/broom2.py 
-```
-
-For training multipleviews scenes,you are supposed to build a configuration file named (you dataset name).py under "./arguments/mutipleview",after that,run
+For training on Tumtraf scenes,you are supposed to build a configuration file named (you dataset name).py under "./arguments/mutipleview",after that,run
 ```python
 python train.py -s  data/multipleview/(your dataset name) --port 6017 --expname "multipleview/(your dataset name)" --configs arguments/multipleview/(you dataset name).py 
 ```
@@ -301,11 +292,9 @@ python scripts/downsample_point.py data/dynerf/sear_steak/colmap/dense/workspace
 
 Some source code of ours is borrowed from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting), [k-planes](https://github.com/Giodiro/kplanes_nerfstudio),[HexPlane](https://github.com/Caoang327/HexPlane), [TiNeuVox](https://github.com/hustvl/TiNeuVox). We sincerely appreciate the excellent works of these authors.
 
-## Acknowledgement
 
-We would like to express our sincere gratitude to [@zhouzhenghong-gt](https://github.com/zhouzhenghong-gt/) for his revisions to our code and discussions on the content of our paper.
 
-## Citation
+## Acknoledgements
 
 Some insights about neural voxel grids and dynamic scenes reconstruction originate from [TiNeuVox](https://github.com/hustvl/TiNeuVox). If you find this repository/work helpful in your research, welcome to cite these papers and give a ⭐.
 
