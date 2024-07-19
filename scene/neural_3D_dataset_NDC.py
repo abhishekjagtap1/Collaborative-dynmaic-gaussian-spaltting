@@ -993,8 +993,8 @@ class Neural3D_NDC_Dataset(Dataset):
                             intrinsic_matrix_for_rendering = intrinsic_south_2
                         
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_vehicle,#intrinsic_matrix_for_rendering, #intrinsic_south_2, #
-                            'extrinsic_matrix': extrinsic_v, # update_inter_veh,#update_extrinsics_ve, # , novel_poses_vehicle[img_index], # #
+                            'intrinsic_matrix': intrinsic_vehicle,# #intrinsic_south_2, #intrinsic_matrix_for_rendering, #
+                            'extrinsic_matrix': update_inter_veh,#extrinsic_v, # update_extrinsics_ve, # , novel_poses_vehicle[img_index], # #
                             "projection_matrix": vehicle_proj
                         }
                         N_time = len(image_files)
