@@ -1,8 +1,10 @@
 
 ## ECCV Benchmarking Time
 
+- **Use Pre trained gaussian point cloud for initialization -> observed PSNR upto 38 beating everyone in the race**
 - Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
-- Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one.
+- Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one. 
+
   
 
 ##  Results
@@ -19,11 +21,18 @@
 ### Novel View Synthesis [Left - Infrastructure View, Right - Vehicle trying to view left side of the scene]
 ![Novel View Synthesis Showing Collaboration](assets/Novel_view_using_infrastructure.gif)
 
+### Freeze Time - Novel View Synthesis [Collaboration Between Infrastructrure and Vehicle]
+![Novel View Synthesis Showing Collaboration (Freezed Time)](assets/FreezeTime.gif)
+
 # Recent Updates
 
 1) **Broken View Fixed:**
    - For Rendering a 3D scene from different agents, camera intrinsics needs to be adapted accordingly, as different agents have different intrinsic matrix
    - Dumb way to fix is by - changing intrinsic matrix via image_index - Works for now 
+   - **New Updates**:
+   - **Fixed SIBR viewer:** by changing ```FovX = focal2fov(self.dataset.focal[0], image.shape[2]) * 1.9``` ```FovY = focal2fov(self.dataset.focal[0], image.shape[1]) * 1.9``` in scene/datsaset.py:30 
+   - Use ```./install/bin/SIBR_remoteGaussian_app --port 6018 --path /home/uchihadj/TUMtraf/4DGaussians/data/junk_combined_data/0/``` for visualizing training
+   - Use ```./install/bin/SIBR_gaussianViewer_app -m /home/uchihadj/ECCV_workshop/4DGaussians/output/ECCV_2025/Without_collaboration_SIBR/SIBR_viewer_per_time/```  for rendering
 
 2) **How to accurately measure novel view synthesis results** - Benchmark LPIPS and PSNR and other metric using different poses
    - Currently working on it
@@ -31,7 +40,9 @@
 4) **Visulize With and Without collaboration results** - Under Training
 5)  **How to avoid floaters when visulizing** - Crop or remove gaussian outliers using some post-processing scripts
 6)  **How to Improve Dynamic gaussian performace:** Currently training is done only for 14K iteration, Need to increase to 20K and hope my ```scene/deforamtion.py``` does not throw any NAN errors
-
+  
+# To-Do's
+1) **Rendering or SIBR viewer still requires a colmap path to specify dataset type:**
 
 ## Environmental Setups
 
