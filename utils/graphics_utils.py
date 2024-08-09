@@ -70,12 +70,26 @@ def getProjectionMatrix(znear, zfar, fovX, fovY):
     P[2, 3] = -(zfar * znear) / (zfar - znear)
     return P
 
-def getProjectionMatrix2(znear, zfar, K, W, H):
-    fx = K[0, 0]
-    fy = K[1, 1]
-    cx = K[0, 2]
-    cy = K[1, 2]
-    #print(fx, fy, cx, cy)
+def getProjectionMatrix2(znear, zfar, fovX, fovY, W, H):
+    """
+    Rendering Parameters Fovx, y 0.6770769093235088 0.4332118476460673 [06/08 16:52:51]  -> This is used for rendering,
+    Training Parameters Fov -> Focal values that is being used to train properly 1315.1582,  1362.7758
+    Center of camera that gives me proper alignment between cameras Cx and Cy 962.73486 580.64825 this is probably for south2 camera
+    Args:
+        znear:
+        zfar:
+        K:
+        W:
+        H:
+
+    Returns:
+
+    """
+    fx = 1315.1582 #fovX # K[0, 0]
+    fy = 1362.7758 #fovY #K[1, 1]
+    cx = 962.73486 #K[0, 2]
+    cy = 580.64825 #K[1, 2]
+    #print("Center of camera that gives me proper alignment between cameras", cx, cy)
     """
     For Vehicle Fovx whenm redenring via SIBR viewer is FovY=0.4332118476460673, FovX=0.6770769093235088, -> dont use but keep for refernce
     """

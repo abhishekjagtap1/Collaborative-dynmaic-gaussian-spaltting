@@ -27,20 +27,23 @@ class FourDGSdataset(Dataset):
                 R = extrinsic_matrix[:3, :3]  # .transpose()
                 T = extrinsic_matrix[:3, 3]
                 #R,T = w2c
-                FovX = focal2fov(self.dataset.focal[0], image.shape[2])
-                FovY = focal2fov(self.dataset.focal[0], image.shape[1])
+                FovX = focal2fov(self.dataset.focal[0], image.shape[2]) * 1.9
+                FovY = focal2fov(self.dataset.focal[0], image.shape[1]) * 1.9
+                #print("Training Parameters Fovx, y", FovX, FovY )
                 mask=None
                 F = w2c['intrinsic_matrix']
+                #print("Focal values that is being used to train properly", F[0, 0], F[1, 1])
                 depth = None
             except:
                 #print("Wrong loop for loading Data")
                 caminfo = self.dataset[index]
-                print("DATA Index ", self.dataset[index])
+                #print("DATA Index ", len(self.dataset))
                 image = caminfo.image
                 R = caminfo.R
                 T = caminfo.T
-                FovX = caminfo.FovX
-                FovY = caminfo.FovY
+                FovX = caminfo.FovX * 1.9
+                FovY = caminfo.FovY * 1.9
+                #print("Rendering Parameters Fovx, y", FovX, FovY)
                 time = caminfo.time
                 depth = None #caminfo.depth #
     

@@ -76,6 +76,13 @@ Do not Downsample points instead reduce the bounds thats it and use point painti
 
 """
 
+"""
+New Insights: Usin pre-trained pointclouds from gaussian spalts help fine tune performace
+
+-> Issue 1: maintain a proper projection matrix for SIBR viewer
+Check if FOVX and FOVy are changing when rendering and training as these will also change projection matrix -> scene/cameras.py:70
+"""
+
 
 def normalize(v):
     """Normalize a vector."""
@@ -587,7 +594,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
         # Sample N_views poses for validation - NeRF-like camera trajectory.
         N_views = 300
-        self.val_poses = get_spiral(poses, self.near_fars, N_views=N_views)
+
         # self.val_poses = self.directions
         W, H = self.img_wh
         poses_i_train = []
@@ -598,6 +605,15 @@ class Neural3D_NDC_Dataset(Dataset):
         self.poses = poses[poses_i_train]
         self.poses_all = poses
         self.image_paths, self.image_poses, self.image_times, N_cam, N_time, self.depth_paths = self.load_images_path(datadir, self.split)
+        extract_pose  = [] #self.image_poses
+        for i in range(N_time):
+            extrinsic_matrix_poses = self.image_poses[i]['extrinsic_matrix']
+            R = extrinsic_matrix_poses[:3, :3]  # np.transpose(extrinsic_matrix[:3, :3])
+            T = extrinsic_matrix_poses[:3, 3]
+            pose_matrix = np.hstack((R, T.reshape(3, 1)))
+            extract_pose.append(pose_matrix)
+        render_poses = np.stack(extract_pose)
+        self.val_poses = get_spiral(render_poses, self.near_fars, N_views=N_views)
 
         """
         Render novel poses for validation 
@@ -628,7 +644,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
         for root, dirs, files in os.walk(datadir):
             for dir in dirs:
-                if dir == "cam04":  # South 2
+                if dir == "cam01":  # South 2
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -765,7 +781,7 @@ class Neural3D_NDC_Dataset(Dataset):
                                                         [0.0, 2676.64, 262.745],
                                                         [0.0, 0.0, 1.0]], dtype=np.float32)
 
-                        intermediate_matrices = compute_intermediate_matrices(E2, E_dynamic, num_intermediates=len(image_files))
+                        intermediate_matrices = compute_intermediate_matrices(E1, E_dynamic, num_intermediates=len(image_files))
                         #intermediate_matrices = generate_intermediate_posesshortest(E1, E_dynamic, n_poses=len(image_files))
 
                         #intermediate_matrices = compute_intermediate_matrices_novel(E2, E1, num_intermediates=20)
@@ -783,7 +799,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle, #
-                            'extrinsic_matrix': extrinsic_south_2, #update_inter, #update_extrinsics, # #novel_poses[img_index], # #
+                            'extrinsic_matrix': extrinsic_south_2, #update_inter, # update_extrinsics, # #novel_poses[img_index], # #
                             "projection_matrix": south_2_proj
                         }
                         N_time = len(image_files)
@@ -803,7 +819,7 @@ class Neural3D_NDC_Dataset(Dataset):
                     metadata_folders = os.path.join(root, "vehicle_meta_data")
                     meta_files = sorted(os.listdir(metadata_folders))
                     this_count = 0
-                    assert len(meta_files) == len(image_files)
+                    #assert len(meta_files) == len(image_files)
                     #image_files = image_files[:20]
                     #meta_files = meta_files[:20]
 
@@ -987,14 +1003,14 @@ class Neural3D_NDC_Dataset(Dataset):
                         #intermediate_matrices = compute_intermediate_matrices_novel(E1, E2, num_intermediates=20)
                         update_inter_veh = intermediate_matrices[img_index]
 
-                        if img_index < 15:
+                        if img_index < 3:
                             intrinsic_matrix_for_rendering = intrinsic_vehicle
                         else:
                             intrinsic_matrix_for_rendering = intrinsic_south_2
                         
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_vehicle,# #intrinsic_south_2, #intrinsic_matrix_for_rendering, #
-                            'extrinsic_matrix': update_inter_veh,#extrinsic_v, # update_extrinsics_ve, # , novel_poses_vehicle[img_index], # #
+                            'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle,# #intrinsic_south_2, #
+                            'extrinsic_matrix': extrinsic_v, #update_inter_veh, #extrinsic_v, #update_extrinsics_ve, #  , novel_poses_vehicle[img_index], # #
                             "projection_matrix": vehicle_proj
                         }
                         N_time = len(image_files)
@@ -1006,7 +1022,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-                if dir == "cam08":  # South 1
+                if dir == "cam03":  # South 1
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1036,6 +1052,28 @@ class Neural3D_NDC_Dataset(Dataset):
                                         [0.02625162, -0.86089253, -0.5081085, 0.08758777],
                                         [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
 
+
+                        extrinsic_south_1_calib = np.asarray([[0.95302056, - 0.30261307,  0.01330958,  1.77326515],
+                                                    [-0.12917788, - 0.44577866, - 0.88577337,  7.60903957],
+                                                    [0.27397972, 0.84244093, - 0.46392715, 4.04778098],
+                                                    [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+                        transformation_matrix_base_to_camera_south_1 = np.array([
+                            [0.891382638626301, 0.37756862104528707, -0.07884507325924934, 25.921784677055939],
+                            [0.2980421080238165, -0.6831891949380544, -0.6660273169946723, 13.668310799382738],
+                            [-0.24839844089507856, 0.5907739097931769, -0.7525203649548087, 18.630430017833277],
+                            [0, 0, 0, 1]], dtype=float)
+                        transformation_matrix_lidar_to_base_south_1 = np.array([
+                            [0.247006, -0.955779, -0.15961, -16.8017],
+                            [0.912112, 0.173713, 0.371316, 4.66979],
+                            [-0.327169, -0.237299, 0.914685, 6.4602],
+                            [0.0, 0.0, 0.0, 1.0], ], dtype=float)
+
+                        extrinsic_matrix_lidar_to_camera_south_1 = np.matmul(
+                            transformation_matrix_base_to_camera_south_1,
+                            transformation_matrix_lidar_to_base_south_1)
+                        camera_to_lidar_extrinsics_south_1 = np.linalg.inv(extrinsic_matrix_lidar_to_camera_south_1)
+
+
                         south_1_proj = np.asarray(
                             [[1279.275240545117, -862.9254609474538, -443.6558546306608, -16164.33175985643],
                              [-57.00793327192514, -67.92432779187584, -1461.785310749125, -806.9258947569469],
@@ -1043,7 +1081,102 @@ class Neural3D_NDC_Dataset(Dataset):
                             dtype=np.float32)
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_1,
-                            'extrinsic_matrix': extrinsic_south_1,
+                            'extrinsic_matrix': camera_to_lidar_extrinsics_south_1,
+                            "projection_matrix": south_1_proj
+                        }
+                        N_time = len(image_files)
+                        image_paths.append(os.path.join(images_path))
+                        if self.depth_data:
+                            depth_paths.append(os.path.join(depth_path))
+
+                        image_times.append(float(img_index / len(image_files)))
+                        image_poses.append(image_pose_dict)
+
+                        this_count += 1
+
+                if dir == "cam04":  # north 1
+                    N_cams += 1
+                    image_folders = os.path.join(root, dir)
+                    image_files = sorted(os.listdir(image_folders))
+                    this_count = 0
+                    #image_files = image_files[:20] #hardcode to take only first 20 samples
+                    for img_file in image_files:
+                        if this_count >= countss: break
+                        img_index = image_files.index(img_file)
+                        images_path = os.path.join(image_folders, img_file)
+                        if self.depth_data:
+                            depth_folder = os.path.join(root, "cam01_depth")
+                            depth_files = sorted(os.listdir(depth_folder))
+                            depth_files = depth_files[:20]
+                            assert len(depth_files) == len(image_files)
+                            for depth_file in depth_files:
+                                depth_path = os.path.join(depth_folder, depth_file)
+
+                        intrinsic_south_1 = np.asarray([[1400.3096617691212, 0.0, 967.7899705163408],
+                                                        [0.0, 1403.041082755918, 581.7195041357244],
+                                                        [0.0, 0.0, 1.0]], dtype=np.float32)
+                        """
+                        Using extrinsics matrix from TUMTRAF Repo
+                        """
+
+                        extrinsic_south_1 = np.asarray([[0.41204962, -0.45377758, 0.7901276, 2.158825],
+                                        [-0.9107832, -0.23010845, 0.34281868, -15.5765505],
+                                        [0.02625162, -0.86089253, -0.5081085, 0.08758777],
+                                        [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+
+
+                        extrinsic_south_1_calib = np.asarray([[0.95302056, - 0.30261307,  0.01330958,  1.77326515],
+                                                    [-0.12917788, - 0.44577866, - 0.88577337,  7.60903957],
+                                                    [0.27397972, 0.84244093, - 0.46392715, 4.04778098],
+                                                    [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+                        transformation_matrix_base_to_camera_south_1 = np.array([
+                            [0.891382638626301, 0.37756862104528707, -0.07884507325924934, 25.921784677055939],
+                            [0.2980421080238165, -0.6831891949380544, -0.6660273169946723, 13.668310799382738],
+                            [-0.24839844089507856, 0.5907739097931769, -0.7525203649548087, 18.630430017833277],
+                            [0, 0, 0, 1]], dtype=float)
+                        transformation_matrix_lidar_to_base_south_1 = np.array([
+                            [0.247006, -0.955779, -0.15961, -16.8017],
+                            [0.912112, 0.173713, 0.371316, 4.66979],
+                            [-0.327169, -0.237299, 0.914685, 6.4602],
+                            [0.0, 0.0, 0.0, 1.0], ], dtype=float)
+
+                        north2infralidar = np.asarray([[-0.56460226, -0.4583457, 0.6863989, 0.64204305],
+                                                       [-0.8248329, 0.34314296, -0.4493365, -16.182753],
+                                                       [-0.02958117, -0.81986094, -0.57179797, 1.6824605],
+                                                       [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+                        shata = np.linalg.inv(north2infralidar)
+
+                        rotation_matrix = np.array([
+                            [-0.29298163, 0.95605249, 0.01119853],
+                            [0.87735771, 0.26417368, 0.40056923],
+                            [0.38000685, 0.12718454, -0.91619806]
+                        ])
+
+                        # Define the new translation vector
+                        translation_matrix = np.array([
+                            [236.433],
+                            [312.179],
+                            [-987.74]
+                        ])
+
+                        # Combine rotation matrix and translation vector to create the extrinsic matrix
+                        extrinsic_matrix = np.hstack((rotation_matrix, translation_matrix))
+                        extrinsic_matrix_4x4 = np.vstack((extrinsic_matrix, [0, 0, 0, 1]))
+
+                        extrinsic_matrix_lidar_to_camera_north_1 = np.matmul(
+                            extrinsic_matrix_4x4,
+                            transformation_matrix_lidar_to_base_south_1)
+                        camera_to_lidar_extrinsics_north_1 = np.linalg.inv(extrinsic_matrix_lidar_to_camera_north_1)
+
+
+                        south_1_proj = np.asarray(
+                            [[1279.275240545117, -862.9254609474538, -443.6558546306608, -16164.33175985643],
+                             [-57.00793327192514, -67.92432779187584, -1461.785310749125, -806.9258947569469],
+                             [0.7901272773742676, 0.3428181111812592, -0.508108913898468, 3.678680419921875]],
+                            dtype=np.float32)
+                        image_pose_dict = {
+                            'intrinsic_matrix': intrinsic_south_1,
+                            'extrinsic_matrix': north2infralidar,
                             "projection_matrix": south_1_proj
                         }
                         N_time = len(image_files)

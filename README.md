@@ -15,6 +15,7 @@
 ### 3D Reconstruction Video
 ![3D Reconstruction Video](assets/3DReconstruction_video.gif)
 
+
 ### Novel View Synthesis Showing Collaboration Video
 ![Novel View Synthesis Showing Collaboration](assets/Novel_view_showing_collboration.gif)
 
@@ -23,6 +24,9 @@
 
 ### Freeze Time - Novel View Synthesis [Collaboration Between Infrastructrure and Vehicle]
 ![Novel View Synthesis Showing Collaboration (Freezed Time)](assets/FreezeTime.gif)
+
+### 3 Agents Collaboration - Novel View Synthesis [Collaboration Between Infrastructrure and Vehicle]
+[Collaboration of 3 AGENTS](assets/collaboration_3_agents.gif)
 
 # Recent Updates
 

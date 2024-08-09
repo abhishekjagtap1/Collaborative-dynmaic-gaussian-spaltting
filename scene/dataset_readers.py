@@ -124,8 +124,10 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 def fetchPly(path):
     plydata = PlyData.read(path)
     vertices = plydata['vertex']
+    #print(vertices)
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
-    colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
+    #colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
+    colors = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T #/ 255.0
     normals = np.zeros((len(positions), 3))
     #normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
     return BasicPointCloud(points=positions, colors=colors, normals=normals)
@@ -449,8 +451,12 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     # loading all the data follow hexplane format
     # ply_path = os.path.join(datadir, "points3D_dense.ply")
     #ply_path = os.path.join(datadir, "lidar_init/points3d_south_vehilce_filtered.ply") # This gave a NAN
-    ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #this didnt give nan for part 1 -> after 13960 iter nan (most important )
+    #ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #this didnt give nan for part 1 -> after 13960 iter nan (most important )
     #ply_path = os.path.join(datadir, "lidar_init/downsample_points_colouzred_distengled_scene.ply") #this gives Nan after 5100 iterations
+    """
+    Use pretrained gaussian point clouds for init
+    """
+    ply_path = "/home/uchihadj/ECCV_workshop/splatviz/_ply_files/first_trained_iter.ply"
 
 
     """

@@ -64,7 +64,7 @@ class Scene:
         else:
             assert False, "Could not recognize scene type!"
         self.maxtime = scene_info.maxtime
-        self.dataset_type = dataset_type
+        self.dataset_type = dataset_type #"MultipleView" #
         self.cameras_extent = scene_info.nerf_normalization["radius"]
         print("Loading Training Cameras")
         self.train_camera = FourDGSdataset(scene_info.train_cameras, args, dataset_type)

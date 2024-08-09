@@ -62,7 +62,7 @@ class Camera(nn.Module):
         """
         For SIBR viewer this is needed
         """
-        #self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy).transpose(0,1)
+        self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy).transpose(0,1)
 
         """
         This  line cannot be used for rendering, since intrinsic matrix is not updated in dataset.py file ->  update relevant code
@@ -71,8 +71,13 @@ class Camera(nn.Module):
                                                       W=self.image_width, H=self.image_height).transpose(0, 1) #
                                                       
         """
-        self.projection_matrix = getProjectionMatrix2(znear=self.znear, zfar=self.zfar, K=self.original_focal,
-                                                      W=self.image_width, H=self.image_height).transpose(0, 1) #
+        #self.projection_matrix = getProjectionMatrix2(znear=self.znear, zfar=self.zfar, K=self.original_focal,
+         #                                             W=self.image_width, H=self.image_height).transpose(0, 1) #
+        """
+        Attempt to fix view projection
+        """
+        #self.projection_matrix = getProjectionMatrix2(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy,
+         #                                             W=self.image_width, H=self.image_height).transpose(0, 1) #
         # .cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]

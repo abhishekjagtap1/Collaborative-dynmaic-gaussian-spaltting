@@ -105,7 +105,7 @@ if __name__ == "__main__":
     model = ModelParams(parser, sentinel=True)
     pipeline = PipelineParams(parser)
     hyperparam = ModelHiddenParams(parser)
-    parser.add_argument("--iteration", default=-1, type=int)
+    parser.add_argument("--iteration", default=7000, type=int)
     parser.add_argument("--skip_train", action="store_true")
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
@@ -120,5 +120,6 @@ if __name__ == "__main__":
         args = merge_hparams(args, config)
     # Initialize system state (RNG)
     safe_state(args.quiet)
+    print(args.iteration)
 
     render_sets(model.extract(args), hyperparam.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test, args.skip_video)
