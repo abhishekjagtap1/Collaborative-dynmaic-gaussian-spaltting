@@ -25,8 +25,11 @@
 ### Freeze Time - Novel View Synthesis [Collaboration Between Infrastructrure and Vehicle]
 ![Novel View Synthesis Showing Collaboration (Freezed Time)](assets/FreezeTime.gif)
 
-### 3 Agents Collaboration - Novel View Synthesis [Collaboration Between Infrastructrure and Vehicle]
-[Collaboration of 3 AGENTS](assets/collaboration_3_agents.gif)
+## 3 Agents Collaboration[Collaboration Between Two infrastructure and vehicle]
+![Novel View Synthesis Showing Collaboration (Freezed Time)](assets/collaboration_3_agents.gif)
+
+### Segment Anything and Everything in 3D - Semantic Novel View Synthesis [Collaboration Between Two infrastructure and vehicle]
+![Semantic Novel View Synthesis Showing Collaboration (Freezed Time)](assets/Segment_anything_in_3D.gif)
 
 # Recent Updates
 
