@@ -1,5 +1,5 @@
 
-## ECCV Benchmarking Time
+## Collaborative Dynamic Gaussian Splatting
 
 - **Use Pre trained gaussian point cloud for initialization -> observed PSNR upto 38 beating everyone in the race**
 - Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
@@ -161,48 +161,7 @@ Run
 
 **PS:** When will I solve all this problem?
 
-**For multipleviews scenes:**
-If you want to train your own dataset of multipleviews scenes,you can orginize your dataset as follows:
 
-```
-├── data
-|   | multipleview
-│     | (your dataset name) 
-│   	  | cam01
-|     		  ├── frame_00001.jpg
-│     		  ├── frame_00002.jpg
-│     		  ├── ...
-│   	  | cam02
-│     		  ├── frame_00001.jpg
-│     		  ├── frame_00002.jpg
-│     		  ├── ...
-│   	  | ...
-```
-After that,you can use the  `multipleviewprogress.sh` we provided to generate related data of poses and pointcloud.You can use it as follows:
-```bash
-bash multipleviewprogress.sh (youe dataset name)
-```
-You need to ensure that the data folder is orginized as follows after running multipleviewprogress.sh:
-```
-├── data
-|   | multipleview
-│     | (your dataset name) 
-│   	  | cam01
-|     		  ├── frame_00001.jpg
-│     		  ├── frame_00002.jpg
-│     		  ├── ...
-│   	  | cam02
-│     		  ├── frame_00001.jpg
-│     		  ├── frame_00002.jpg
-│     		  ├── ...
-│   	  | ...
-│   	  | sparse_
-│     		  ├── cameras.bin
-│     		  ├── images.bin
-│     		  ├── ...
-│   	  | points3D_multipleview.ply
-│   	  | poses_bounds_multipleview.npy
-```
 
 
 ## Training
@@ -248,60 +207,6 @@ Run the following script to render the images.
 python render.py --model_path "output/dnerf/bouncingballs/"  --skip_train --configs arguments/dnerf/bouncingballs.py  &
 ```
 
-## Evaluation
-
-You can just run the following script to evaluate the model.
-
-```
-python metrics.py --model_path "output/dnerf/bouncingballs/" 
-```
-
-
-## Viewer
-[Watch me](./docs/viewer_usage.md)
-## Scripts
-
-There are some helpful scripts, please feel free to use them.
-
-`export_perframe_3DGS.py`:
-get all 3D Gaussians point clouds at each timestamps.
-
-usage:
-
-```python
-python export_perframe_3DGS.py --iteration 14000 --configs arguments/dnerf/lego.py --model_path output/dnerf/lego 
-```
-
-You will a set of 3D Gaussians are saved in `output/dnerf/lego/gaussian_pertimestamp`.
-
-`weight_visualization.ipynb`:
-
-visualize the weight of Multi-resolution HexPlane module.
-
-`merge_many_4dgs.py`:
-merge your trained 4dgs.
-usage:
-
-```python
-export exp_name="dynerf"
-python merge_many_4dgs.py --model_path output/$exp_name/sear_steak
-```
-
-`colmap.sh`:
-generate point clouds from input data
-
-```bash
-bash colmap.sh data/hypernerf/virg/vrig-chicken hypernerf 
-bash colmap.sh data/dynerf/sear_steak llff
-```
-
-**Blender** format seems doesn't work. Welcome to raise a pull request to fix it.
-
-`downsample_point.py` :downsample generated point clouds by sfm.
-
-```python
-python scripts/downsample_point.py data/dynerf/sear_steak/colmap/dense/workspace/fused.ply data/dynerf/sear_steak/points3D_downsample2.ply
-```
 
 
 ## Contributions
@@ -314,22 +219,4 @@ Some source code of ours is borrowed from [3DGS](https://github.com/graphdeco-in
 
 
 
-## Acknoledgements
 
-Some insights about neural voxel grids and dynamic scenes reconstruction originate from [TiNeuVox](https://github.com/hustvl/TiNeuVox). If you find this repository/work helpful in your research, welcome to cite these papers and give a ⭐.
-
-```
-@article{wu20234dgaussians,
-  title={4D Gaussian Splatting for Real-Time Dynamic Scene Rendering},
-  author={Wu, Guanjun and Yi, Taoran and Fang, Jiemin and Xie, Lingxi and Zhang, Xiaopeng and Wei Wei and Liu, Wenyu and Tian, Qi and Wang Xinggang},
-  journal={arXiv preprint arXiv:2310.08528},
-  year={2023}
-}
-
-@inproceedings{TiNeuVox,
-  author = {Fang, Jiemin and Yi, Taoran and Wang, Xinggang and Xie, Lingxi and Zhang, Xiaopeng and Liu, Wenyu and Nie\ss{}ner, Matthias and Tian, Qi},
-  title = {Fast Dynamic Radiance Fields with Time-Aware Neural Voxels},
-  year = {2022},
-  booktitle = {SIGGRAPH Asia 2022 Conference Papers}
-}
-```
