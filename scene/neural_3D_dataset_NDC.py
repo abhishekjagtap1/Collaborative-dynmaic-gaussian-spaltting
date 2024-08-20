@@ -1022,7 +1022,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-                if dir == "cam03":  # South 1
+                if dir == "cam08":  # South 1
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1094,7 +1094,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-                if dir == "cam04":  # north 1
+                if dir == "cam08":  # north 1
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
