@@ -44,31 +44,166 @@ def multithread_write(image_list, path):
             write_image(image_list[index], index, path)
     
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
+"""
+import os
+import imageio
+import torch
+import numpy as np
+from time import time
+from tqdm import tqdm
+
+
+
+
+
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background, cam_type):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
+    depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth_maps")
+    
+
+    os.makedirs(render_path, exist_ok=True)
+    os.makedirs(gts_path, exist_ok=True)
+    os.makedirs(depth_path, exist_ok=True)  # Directory to save depth maps
+
+    render_images = []
+    depth_images = []  # Store depth maps
+    gt_list = []
+    render_list = []
+
+    print("point nums:", gaussians._xyz.shape[0])
+
+    for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+        if idx == 0:
+            time1 = time()
+
+        # Rendering Gaussian splats
+        depth_map = render(view, gaussians, pipeline, background, cam_type=cam_type)["depths"]
+        rendering = render(view, gaussians, pipeline, background, cam_type=cam_type)["render"]
+
+        # Move tensor to CPU if it's on CUDA, then convert to NumPy
+        if torch.is_tensor(rendering):
+            rendering = rendering.cpu().numpy()
+
+        render_images.append(to8b(rendering[0]).transpose(1, 2, 0))
+        render_list.append(rendering)
+
+        # Get the depth map from the rendering function
+        depth_map = render(view, gaussians, pipeline, background, cam_type=cam_type).get("depths")
+
+        # If depth map is available, process it
+        if depth_map is not None:
+            # Move tensor to CPU if it's on CUDA, then convert to NumPy
+            if torch.is_tensor(depth_map):
+                depth_map = depth_map.cpu().numpy()
+
+            depth_images.append(to8b(depth_map))  # Convert depth map to 8-bit for saving
+
+        # Handling ground truth (GT) images
+        if name in ["train", "test"]:
+            if cam_type != "PanopticSports":
+                gt = view.original_image[0:3, :, :]
+            else:
+                gt = view['image'].cuda()
+
+            # Move GT image to CPU if it's on CUDA
+            if torch.is_tensor(gt):
+                gt = gt.cpu().numpy()
+
+            gt_list.append(gt)
+
+    time2 = time()
+    print("FPS:", (len(views) - 1) / (time2 - time1))
+
+    # Save ground truth images
+    multithread_write(gt_list, gts_path)
+
+    # Save rendered images
+    multithread_write(render_list, render_path)
+
+    # Save depth maps
+    if depth_images:
+        multithread_write(depth_images, depth_path)  # Save depth maps to separate directory
+
+    # Create video from rendered images at 10 FPS
+    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), render_images,
+                     fps=10)
+
+    # Create video from depth maps at 10 FPS (if depth maps were generated)
+    if depth_images:
+        imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_depth.mp4'), depth_images,
+                         fps=10)
+                         
+                         --model_path
+"/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/first_20_3_Frame"
+--skip_video
+--configs
+arguments/dynerf/default.py
+
+"""
+
+
+def render_set(model_path, name, iteration, views, gaussians, pipeline, background, cam_type):
+    render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
+    gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
+    depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth_maps")
 
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
+    makedirs(depth_path, exist_ok=True)
+
     render_images = []
     gt_list = []
     render_list = []
+    depth_list = []
+    depth_images = []
     # breakpoint()
     print("point nums:",gaussians._xyz.shape[0])
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
         # breakpoint()
-        
+
         rendering = render(view, gaussians, pipeline, background,cam_type=cam_type)["render"]
         # torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         render_images.append(to8b(rendering).transpose(1,2,0))
-        # print(to8b(rendering).shape)
+
+        rendering_d = render(view, gaussians, pipeline, background, cam_type=cam_type)["depth"]
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from matplotlib import cm
+
+        # Assuming `rendering_d` is your depth tensor of shape (1, 1200, 1900) on CUDA
+        tensor_cpu = rendering_d.squeeze().cpu().numpy()  # Squeeze to remove the first dimension (1, 1200, 1900) -> (1200, 1900)
+
+        # Step 1: Normalize the depth values between 0 and 1
+        tensor_cpu_normalized = (tensor_cpu - np.min(tensor_cpu)) / (np.max(tensor_cpu) - np.min(tensor_cpu))
+
+        # Step 2: Apply the 'magma' colormap, trubo, plasma, Spectral
+        colormap = cm.get_cmap('inferno')
+        colored_depth = colormap(tensor_cpu_normalized)  # This returns a (1200, 1900, 4) RGBA image
+
+        # Step 3: Convert the RGBA image to RGB (removing the alpha channel)
+        colored_depth_rgb = colored_depth[:, :, :3]  # (1200, 1900, 3)
+
+        # Step 4: Convert the RGB image back to a PyTorch tensor
+        colored_depth_tensor = torch.from_numpy(colored_depth_rgb).permute(2, 0, 1).float()  # (3, 1200, 1900)
+
+        # (Optional) Move the tensor back to CUDA if needed
+        # colored_depth_tensor = colored_depth_tensor.cuda()
+
+        # Now, `colored_depth_tensor` is your tensor representing the depth visualization in 'magma' colormap
+        # You can now save or use this tensor as needed
+        depth_images.append(to8b(colored_depth_tensor).transpose(1, 2, 0))
+        torchvision.utils.save_image(colored_depth_tensor, os.path.join(depth_path, '{0:05d}'.format(idx) + ".png"))
+
         render_list.append(rendering)
         if name in ["train", "test"]:
             if cam_type != "PanopticSports":
                 gt = view.original_image[0:3, :, :]
             else:
                 gt  = view['image'].cuda()
+                #flow_ =
             # torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
             gt_list.append(gt)
         # if idx >= 10:
@@ -82,8 +217,13 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
     multithread_write(render_list, render_path)
 
-    
-    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), render_images, fps=30)
+
+    multithread_write(depth_list, depth_path)
+
+    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'depth_video_rgb.mp4'), depth_images,
+                     fps=5)
+    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), render_images, fps=5)
+
 def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, skip_video: bool):
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)
@@ -105,7 +245,7 @@ if __name__ == "__main__":
     model = ModelParams(parser, sentinel=True)
     pipeline = PipelineParams(parser)
     hyperparam = ModelHiddenParams(parser)
-    parser.add_argument("--iteration", default=7000, type=int)
+    parser.add_argument("--iteration", default=50000, type=int)
     parser.add_argument("--skip_train", action="store_true")
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")

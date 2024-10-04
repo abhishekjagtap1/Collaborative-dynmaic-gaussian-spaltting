@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="4dgaussian" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="4dgaussian" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="cloned_4dgaussian" project-jdk-type="Python SDK" />
 </project>

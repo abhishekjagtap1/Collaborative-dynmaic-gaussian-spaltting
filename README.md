@@ -5,7 +5,13 @@
 - Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
 - Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one. 
 
-  
+## Benchmarking Time
+- **Use 20 seconds clip as used by Waymo, nuscenes for evaluation**
+- Enable flow supervision for dynamic Gaussian -> hardcoded for now
+- Compute PSNR and LPIPS for metric evaluation
+- White Truck scene consisit of 80 frames, so we divide the scene into 4 chunks
+- To keep the same spatial temporal distribution for dynamic gaussian we use the same static gaussian checkpoint for all other scene chunks
+-  Parameters -> default.py -> static gaussian for 2500 iter and dynamic gaussian for 14k
 
 ##  Results
 
@@ -102,7 +108,7 @@ Run
 
 2) **Extrinsics for South_2:**
     - I have used extrinsics for south_2 by multiplying with base:
-        ```python
+        ```
         extrinsic_matrix_lidar_to_camera_south_2 = np.matmul(transformation_matrix_base_to_camera_south_2, transformation_matrix_lidar_to_base_south_2)
         ```
     - As a result, I observe the point cloud rotated and translated incorrectly. It's the same for vehicle and south_1. See `outputs/multiview/less_images_2_trail_coarse_train_render`.

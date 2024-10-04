@@ -12,6 +12,7 @@
 import torch
 import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+#from diff_gaussian_rasterization import
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 from time import time as get_time
@@ -117,6 +118,11 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     # time3 = get_time()
+    """
+    Original Depth diff - use this if flow does not work
+    """
+    """
+    
     rendered_image, radii, depth = rasterizer(
         means3D = means3D_final,
         means2D = means2D,
@@ -126,14 +132,49 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         scales = scales_final,
         rotations = rotations_final,
         cov3D_precomp = cov3D_precomp)
+    """
+    """
+    Flow based rsterizer
+    """
+    rendered_image, radii, rendered_depth, rendered_alpha, proj_means_2D, conic_2D, conic_2D_inv, gs_per_pixel, weight_per_gs_pixel, x_mu = rasterizer(
+        means3D=means3D_final,
+        means2D=means2D,
+        shs=shs_final,
+        colors_precomp=colors_precomp,
+        opacities=opacity,
+        scales=scales_final,
+        rotations=rotations_final,
+        cov3D_precomp=cov3D_precomp)
     # time4 = get_time()
     # print("rasterization:",time4-time3)
     # breakpoint()
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
+    """
+    original code for return
+    """
+    """
     return {"render": rendered_image,
             "viewspace_points": screenspace_points,
             "visibility_filter" : radii > 0,
             "radii": radii,
             "depth":depth}
+    """
+
+    """
+    Flow based rendering
+    """
+    return {"render": rendered_image,
+            "viewspace_points": screenspace_points,
+            "visibility_filter": radii > 0,
+            "radii": radii,
+            "depth": rendered_depth,
+            "proj_2D": proj_means_2D,
+            "gs_per_pixel": gs_per_pixel,
+            "weight_per_gs_pixel": weight_per_gs_pixel,
+            "x_mu": x_mu,
+            "conic_2D": conic_2D,
+            "conic_2D_inv": conic_2D_inv
+            }
+
 
