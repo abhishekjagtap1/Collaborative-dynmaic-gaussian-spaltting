@@ -4,11 +4,11 @@ from natsort import natsorted
 
 
 # Path to the folder containing images
-folder = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/depth_maps"
-output_folder = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/benchmark_depth_20_40_3"  # Folder to save the concatenated frames
+folder = "/home/uchihadj/ECCV_workshop/4DGaussians/output/AM_I_going_CVPR_for_real/avoidong_nan/train/ours_50000/renders"
+output_folder = "/home/uchihadj/ECCV_workshop/4DGaussians/output/AM_I_going_CVPR_for_real/avoidong_nan/train/ours_50000/vis_alligner"  # Folder to save the concatenated frames
 
 # Output video parameters
-output_video_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/depth.mp4"
+output_video_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/AM_I_going_CVPR_for_real/avoidong_nan/train/ours_50000/renders_same_pose.mp4"
 
 """# Path to the folder containing images
 folder = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/renders"
