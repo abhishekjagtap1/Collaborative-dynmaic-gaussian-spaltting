@@ -5,9 +5,9 @@ ModelHiddenParams = dict(
      'output_coordinate_dim': 16,
      'resolution': [64, 64, 64, 150]
     },
-    multires = [1,2],
+    multires = [1,2,4,8],
     defor_depth = 0,
-    net_width = 128,
+    net_width = 256,
     plane_tv_weight = 0.0002,
     time_smoothness_weight = 0.001,
     l1_time_planes =  0.0001,
@@ -23,7 +23,7 @@ OptimizationParams = dict(
     dataloader=False,
     iterations = 50000, #14000
     batch_size=1 ,#4, changed due to batch size
-    coarse_iterations = 2500, #5000 #3000, #
+    coarse_iterations = 250, #2500, #5000 #3000, #
     densify_until_iter = 10_000,
     opacity_reset_interval = 60000,
     opacity_threshold_coarse = 0.005,

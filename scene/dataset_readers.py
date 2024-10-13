@@ -451,12 +451,19 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     # loading all the data follow hexplane format
     # ply_path = os.path.join(datadir, "points3D_dense.ply")
     #ply_path = os.path.join(datadir, "lidar_init/points3d_south_vehilce_filtered.ply") # This gave a NAN
-    #ply_path = os.path.join(datadir, "lidar_init/bounds_reduced_pedestrian_scene.ply") #this didnt give nan for part 1 -> after 13960 iter nan (most important )
+    #ply_path = os.path.join(datadir, "/home/uchihadj/ECCV_workshop/Collaborative-dynmaic-gaussian-spaltting-dev_tumtraf/data/20_2_sec_benchmarking/lidar_init/bounds_reduced_pedestrian_scene.ply") #this didnt give nan for part 1 -> after 13960 iter nan (most important )
     #ply_path = os.path.join(datadir, "lidar_init/downsample_points_colouzred_distengled_scene.ply") #this gives Nan after 5100 iterations
     """
     Use pretrained gaussian point clouds for init
     """
-    ply_path = "/home/uchihadj/ECCV_workshop/splatviz/_ply_files/first_trained_iter.ply"
+    #ply_path = "/home/uchihadj/ECCV_workshop/splatviz/_ply_files/first_trained_iter.ply"
+    """
+    I think i deleted my initilaization - > fuck me i using above one i get it using splatviz
+    """
+    #ply_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/first_20_Frame/point_cloud/iteration_2500/point_cloud.ply"
+    #ply_path = "/home/uchihadj/ECCV_workshop/4DGaussians/splatviz/_ply_files/model_0.ply" # High resolution
+    ply_path = "/home/uchihadj/ECCV_workshop/sumne_/splatviz/_ply_files/model_2.ply"
+
 
 
     """

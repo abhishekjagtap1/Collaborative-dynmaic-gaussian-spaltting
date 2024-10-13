@@ -21,7 +21,7 @@ class FourDGSdataset(Dataset):
 
         if self.dataset_type != "PanopticSports":
             try:
-                image, w2c, time, depth, flow = self.dataset[index]
+                image, w2c, time, depth, flow, sam_mask = self.dataset[index]
                 #store = self.dataset[index]
                 extrinsic_matrix = w2c['extrinsic_matrix']
                 R = extrinsic_matrix[:3, :3]  # .transpose()
@@ -33,8 +33,9 @@ class FourDGSdataset(Dataset):
                 mask=None
                 F = w2c['intrinsic_matrix']
                 #print("Focal values that is being used to train properly", F[0, 0], F[1, 1])
-                depth = None
-                #flow = None
+                #depth = None
+                mask = sam_mask
+                flow = flow
             except:
                 #print("Wrong loop for loading Data")
                 caminfo = self.dataset[index]
