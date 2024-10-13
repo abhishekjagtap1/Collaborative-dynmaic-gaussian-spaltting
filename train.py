@@ -122,7 +122,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     # print(viewpoint_index)
                     viewpoint = video_cams[viewpoint_index]
                     custom_cam.time = viewpoint.time
-                    # print(custom_cam.time, viewpoint_index, count)
+                    #print(custom_cam.time, viewpoint_index, count)
+                    print("3rd view", custom_cam.world_view_transform)
                     net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer, stage=stage, cam_type=scene.dataset_type)["render"]
 
                     net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
@@ -159,7 +160,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             viewpoint_cams = []
 
             while idx < batch_size :    
-                    
+
+
                 viewpoint_cam = viewpoint_stack.pop(randint(0,len(viewpoint_stack)-1))
                 if not viewpoint_stack :
                     viewpoint_stack =  temp_list.copy()
@@ -177,18 +179,42 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         rnd_depth = []
         gt_depths = []
         radii_list = []
+        flow_gtsss = []
         visibility_filter_list = []
         viewspace_point_tensor_list = []
+        ################################ Gaussian parameter at t2
+
+        # Initialize 't2' dictionary to store the latest values across iterations
+        t2 = {
+            "proj_2D_t_2": None,
+            "gs_per_pixel": None,
+            "weight_per_gs_pixel": None
+        }
         for viewpoint_cam in viewpoint_cams:
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type)
-            image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+            #image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+            image, viewspace_point_tensor, visibility_filter, radii, proj_2D_t_1, gs_per_pixel, weight_per_gs_pixel, x_mu, cov2D_inv_t_1, cov2D_t_2 = render_pkg["render"], render_pkg[
+                                                                    "viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"], render_pkg["proj_2D"], render_pkg["gs_per_pixel"].long(), render_pkg["weight_per_gs_pixel"], render_pkg["x_mu"], render_pkg["conic_2D"].detach(), render_pkg["conic_2D_inv"]
+
+
             images.append(image.unsqueeze(0))
             if scene.dataset_type!="PanopticSports":
                 gt_image = viewpoint_cam.original_image.cuda()
+                flow_gt = viewpoint_cam.flow.cuda()
             else:
                 gt_image  = viewpoint_cam['image'].cuda()
+                #flow_gt = viewpoint_cam["flow"].cuda()
             
             gt_images.append(gt_image.unsqueeze(0))
+            flow_gtsss.append(flow_gt.unsqueeze(0))
+
+            # Update the t2 dictionary with the latest values (overwriting each iteration)
+            t2["proj_2D_t_1"] = proj_2D_t_1
+            t2["cov2D_inv_t_2"] = cov2D_inv_t_1
+            t2["cov2D_t_2"] = cov2D_t_2
+
+
+            #flow_gtsss.append(flow_gt.unsqueeze(0))
             radii_list.append(radii.unsqueeze(0))
             visibility_filter_list.append(visibility_filter.unsqueeze(0))
             viewspace_point_tensor_list.append(viewspace_point_tensor)
@@ -214,9 +240,51 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
         image_tensor = torch.cat(images,0)
         gt_image_tensor = torch.cat(gt_images,0)
-        # Loss
+        flow_gt_tensor = torch.cat(flow_gtsss, 0)
+        """
+        
+        
+        import matplotlib.pyplot as plt
+
+        # Move tensor to CPU if it's on CUDA and remove the batch dimension
+        tensor_cpu = flow_gt_tensor.squeeze(0).cpu().numpy()  # Shape will now be (1200, 1900, 2)
+
+        flow_x = tensor_cpu[0]  # Horizontal component (1200, 1900)
+        flow_y = tensor_cpu[1]  # Vertical component (1200, 1900)
+
+        # Compute magnitude and angle
+        magnitude = np.sqrt(flow_x ** 2 + flow_y ** 2)
+        angle = np.arctan2(flow_y, flow_x)  # Angle in radians
+
+        # Normalize the magnitude
+        import cv2
+        magnitude = cv2.normalize(magnitude, None, 0, 1, cv2.NORM_MINMAX)
+
+        # Create an HSV image where:
+        # - H (hue) is the angle (converted to degrees)
+        # - S (saturation) is set to 1 (full saturation)
+        # - V (value) is the normalized magnitude
+        hsv = np.zeros((flow_x.shape[0], flow_x.shape[1], 3), dtype=np.float32)
+        hsv[..., 0] = (angle + np.pi) * (180 / np.pi) / 2  # Map angle to [0, 180]
+        hsv[..., 1] = 1  # Full saturation
+        hsv[..., 2] = magnitude  # Value = magnitude
+
+        # Convert HSV to RGB for visualization
+        rgb_flow = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+
+        # Visualize
+        plt.imshow(rgb_flow)
+        plt.title('Optical Flow (HSV Representation)')
+        plt.axis('off')
+        plt.show()
         # breakpoint()
+ # Computes EPE for all pixels
+        """
+
+
         Ll1 = l1_loss(image_tensor, gt_image_tensor[:,:3,:,:])
+
+        """        #L_FLOW_LOSS = end_point_error()
 
         #depth_tensor = torch.cat(rnd_depth,0)
         #gt_depth_tensor = torch.cat(gt_depths,0)
@@ -224,7 +292,96 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         #depth_loss = l1_loss(depth_tensor, gt_depth_tensor[:,:3,:,:])
         #depth_weight_scale = 0.5
 
+        cov2D_t_2_mtx = torch.zeros([cov2D_t_2.shape[0], 2, 2]).cuda()
+        cov2D_t_2_mtx[:, 0, 0] = cov2D_t_2[:, 0]
+        cov2D_t_2_mtx[:, 0, 1] = cov2D_t_2[:, 1]
+        cov2D_t_2_mtx[:, 1, 0] = cov2D_t_2[:, 1]
+        cov2D_t_2_mtx[:, 1, 1] = cov2D_t_2[:, 2]
+
+        cov2D_inv_t_1_mtx = torch.zeros([cov2D_inv_t_1.shape[0], 2, 2]).cuda()
+        cov2D_inv_t_1_mtx[:, 0, 0] = cov2D_inv_t_1[:, 0]
+        cov2D_inv_t_1_mtx[:, 0, 1] = cov2D_inv_t_1[:, 1]
+        cov2D_inv_t_1_mtx[:, 1, 0] = cov2D_inv_t_1[:, 1]
+        cov2D_inv_t_1_mtx[:, 1, 1] = cov2D_inv_t_1[:, 2]
+
+        # B_t_2
+        U_t_2 = torch.svd(cov2D_t_2_mtx)[0]
+        S_t_2 = torch.svd(cov2D_t_2_mtx)[1]
+        V_t_2 = torch.svd(cov2D_t_2_mtx)[2]
+        B_t_2 = torch.bmm(torch.bmm(U_t_2, torch.diag_embed(S_t_2) ** (1 / 2)), V_t_2.transpose(1, 2))
+
+        # B_t_1 ^(-1)
+        U_inv_t_1 = torch.svd(cov2D_inv_t_1_mtx)[0]
+        S_inv_t_1 = torch.svd(cov2D_inv_t_1_mtx)[1]
+        V_inv_t_1 = torch.svd(cov2D_inv_t_1_mtx)[2]
+        B_inv_t_1 = torch.bmm(torch.bmm(U_inv_t_1, torch.diag_embed(S_inv_t_1) ** (1 / 2)),
+                              V_inv_t_1.transpose(1, 2))
+
+        # calculate B_t_2*B_inv_t_1
+        B_t_2_B_inv_t_1 = torch.bmm(B_t_2, B_inv_t_1)
+
+        # calculate cov2D_t_2*cov2D_inv_t_1
+        # cov2D_t_2cov2D_inv_t_1 = torch.zeros([cov2D_inv_t_2.shape[0],2,2]).cuda()
+        # cov2D_t_2cov2D_inv_t_1[:, 0, 0] = cov2D_t_2[:, 0] * cov2D_inv_t_1[:, 0] + cov2D_t_2[:, 1] * cov2D_inv_t_1[:, 1]
+        # cov2D_t_2cov2D_inv_t_1[:, 0, 1] = cov2D_t_2[:, 0] * cov2D_inv_t_1[:, 1] + cov2D_t_2[:, 1] * cov2D_inv_t_1[:, 2]
+        # cov2D_t_2cov2D_inv_t_1[:, 1, 0] = cov2D_t_2[:, 1] * cov2D_inv_t_1[:, 0] + cov2D_t_2[:, 2] * cov2D_inv_t_1[:, 1]
+        # cov2D_t_2cov2D_inv_t_1[:, 1, 1] = cov2D_t_2[:, 1] * cov2D_inv_t_1[:, 1] + cov2D_t_2[:, 2] * cov2D_inv_t_1[:, 2]
+
+        # isotropic version of GaussianFlow
+        # predicted_flow_by_gs = (proj_2D_next[gs_per_pixel] - proj_2D[gs_per_pixel].detach()) * weights.detach()
+
+        # full formulation of GaussianFlow
+        proj_2D_t_2 = t2["proj_2D_t_1"]
+        cov_multi = (B_t_2_B_inv_t_1[gs_per_pixel] @ x_mu.permute(0, 2, 3, 1).unsqueeze(-1).detach()).squeeze()
+        predicted_flow_by_gs = (cov_multi + proj_2D_t_2[gs_per_pixel] - proj_2D_t_1[
+            gs_per_pixel].detach() - x_mu.permute(0, 2, 3, 1).detach()) * weight_per_gs_pixel.unsqueeze(-1).detach()
+
+        # print("sahata")
+        # flow supervision loss
+        # large_motion_msk = torch.norm(flow_gt_tensor, p=2,
+        #                            dim=-1) >= 0.3  # flow_thresh  # flow_thresh = 0.1 or other value to filter out noise, here we assume that we have already loaded pre-computed optical flow somewhere as pseudo GT
+        large_motion_msk_proper = torch.norm(flow_gt_tensor) >= 0.3
+        # now_what_is = (predicted_flow_by_gs.sum(0)[large_motion_msk_proper].permute(0, 3, 1, 2))  # .mean()
+        gt_macha_flow =  flow_gt_tensor.expand(20, -1, -1, -1)  #
+
+        #mse_loss = torch.nn.functional.mse_loss(predicted_flow_by_gs, gt_macha_flow)
+        #lflow = end_point_error(predicted_flow_by_gs, gt_macha_flow)
+
+        def end_point_error(predicted_flow, ground_truth_flow):
+            # Ensure both tensors have the same shape
+            assert predicted_flow.shape == ground_truth_flow.shape, "Predicted and ground truth flows must have the same shape."
+
+            # Compute the L2 norm (EPE) between predicted and ground truth flow
+            epe_per_pixel = torch.norm(predicted_flow - ground_truth_flow, dim=1)  # (batch_size, height, width)
+            return epe_per_pixel.mean()  # Mean EPE for the entire batch
+
+        # Example usage:
+        predicted_flow = predicted_flow_by_gs.permute(0, 3, 1,
+                                                2)  # Ensure predicted flow is in (batch_size, 2, height, width)
+        #ground_truth_flow = ground_truth_flow.expand(predicted_flow.shape[0], -1, -1,
+         #                                            -1)  # Expand ground truth to match batch size
+
+        # Calculate the loss
+        epe_loss = end_point_error(predicted_flow, gt_macha_flow)
+        print(f'EPE Loss: {epe_loss.item()}')
+        """
+
+
+        # what_is_this = predicted_flow_by_gs.sum(0)[large_motion_msk] #.mean() #, p=2, dim=-1).mean())
+        """        Lflow = torch.norm(
+            (flow_gt_tensor - predicted_flow_by_gs.sum(0)[large_motion_msk_proper].permute(0, 3, 1, 2)), p=2,
+            dim=-1).mean()
+        # Lflow = torch.norm(flow_gt_tensor - now_what_is.permute(0, 3, 1, 2) ) #.sum(0))#[large_motion_msk], p=2, dim=-1).mean()
+        # flow_weight = 0.1
+        # loss = loss + flow_weight * Lflow
+
+        Ll1 = Ll1 / Ll1.detach().abs().max()
+        flow_loss_normalized = Lflow / Lflow.detach().abs().max()"""
+
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
+
+
+
         # norm
         """
         Dumb way to supervise depth loss |loss = 0.8 *Ll1 + 0.2 * depth_loss
@@ -232,23 +389,48 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         #loss = 0.8 *Ll1 + 0.2 * depth_loss
 
-        loss = Ll1
+        #loss = Ll1##########################################################################original_loss#######################################
         #loss += depth_weight_scale * depth_loss
         """
         Depth regularizer
         """
         #nearDepthMean_map = nearMean_map(depth_tensor.detach(), gt_image_tensor[:,:3,:,:], kernelsize=3)
         #loss = loss + l2_loss(nearDepthMean_map, depth_tensor) * 1.0
+        "Original fine iteration loss"
+        """
         if stage == "fine" and hyper.time_smoothness_weight != 0:
             # tv_loss = 0
             tv_loss = gaussians.compute_regulation(hyper.time_smoothness_weight, hyper.l1_time_planes, hyper.plane_tv_weight)
             loss += tv_loss
+            
+            
+            
+            Adapting floww supervision 
+            
+
+        """
+
+                # flow_weight could be 1, 0.1, ... whatever you want.
+        loss = Ll1
+
+        if stage == "fine" and hyper.time_smoothness_weight != 0:
+            # tv_loss = 0
+            tv_loss = gaussians.compute_regulation(hyper.time_smoothness_weight, hyper.l1_time_planes, hyper.plane_tv_weight)
+            loss += tv_loss
+
+
+
+
         if opt.lambda_dssim != 0:
             ssim_loss = ssim(image_tensor,gt_image_tensor)
+            print("IS SSIM Loss bein opened")
             loss += opt.lambda_dssim * (1.0-ssim_loss)
+
+
         # if opt.lambda_lpips !=0:
         #     lpipsloss = lpips_loss(image_tensor,gt_image_tensor,lpips_model)
         #     loss += opt.lambda_lpips * lpipsloss
+        #loss = Ll1 #+ tv_loss#+ epe_loss * 0.3 + tv_loss
         
         loss.backward()
         if torch.isnan(loss).any():
@@ -438,7 +620,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[3000,7000,14000, 17000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2500, 3000, 5000, 7000, 10000, 14000, 17000, 20000, 30_000, 45000, 60000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2500, 3000, 5000, 7000, 10000, 14000, 17000, 20000, 30000, 45000, 50000, 60000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
