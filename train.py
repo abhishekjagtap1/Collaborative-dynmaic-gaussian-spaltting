@@ -410,7 +410,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                                             max_steps=opt.iterations)
 
         loss = Ll1
-        if stage == "fine" and iteration % 1000 == 0:
+        if stage == "fine" and iteration % 100 == 0:
             print("Logging Depth supervision")
             Ll1depth_pure = torch.abs((rendered_depth_tensor - depth_gt_tensorr).mean())
 

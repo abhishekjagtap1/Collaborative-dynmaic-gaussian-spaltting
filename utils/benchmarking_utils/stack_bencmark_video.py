@@ -2,12 +2,12 @@ import cv2
 import os
 
 # Paths to the three videos
-video_gt = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/gt.mp4"
-video_render = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/renders.mp4"
-video_depth = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/depth.mp4"
+video_gt = "/home/uchihadj/ECCV_workshop/4DGaussians/output/AM_I_going_CVPR_for_real/avoidong_nan/train/Same_pose_ours_50000/renders_same_pose_gt.mp4"
+video_render = "/home/uchihadj/ECCV_workshop/4DGaussians/output/AM_I_going_CVPR_for_real/avoidong_nan/train/Same_pose_ours_50000/renders_same_pose.mp4"
+video_depth = "/home/uchihadj/ECCV_workshop/4DGaussians/output/AM_I_going_CVPR_for_real/avoidong_nan/train/Same_pose_ours_50000/renders_same_pose_depth.mp4"
 
 # Output video path
-output_video_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/CVPR_2025_Benchmark/20_40_3_AGENTS_Frame/train/ours_20000/Benchmark_video.mp4"
+output_video_path = "/home/uchihadj/ECCV_workshop/4DGaussians/output/AM_I_going_CVPR_for_real/avoidong_nan/train/Same_pose_ours_50000/Benchmark_video.mp4"
 
 # Open the three videos
 cap_gt = cv2.VideoCapture(video_gt)

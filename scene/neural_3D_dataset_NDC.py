@@ -518,7 +518,11 @@ def compute_intermediate_matrices(E1, E2, num_intermediates=20):
     for i in range(1, num_intermediates + 1):
         t = i / (num_intermediates + 1.0)
         E_i = E1 + t * (E2 - E1)
-        intermediate_matrices.append(E_i)
+        if i <5:
+            intermediate_matrices.append(E1)
+            print("are you want to")
+        else:
+            intermediate_matrices.append(E_i)
     return intermediate_matrices
 
 # Example usage
@@ -1006,7 +1010,13 @@ class Neural3D_NDC_Dataset(Dataset):
                         #intermediate_matrices = generate_intermediate_posesshortest(E1, E_dynamic, n_poses=len(image_files))
 
                         #intermediate_matrices = compute_intermediate_matrices_novel(E2, E1, num_intermediates=20)
+                        # Too render smooth videos
                         update_inter = intermediate_matrices[img_index]
+                        """                        if img_index <5:
+                            update_inter = extrinsic_south_2
+                        else:
+                            update_inter = intermediate_matrices[img_index -5]
+                            """
 
                         if img_index < 30:
                             intrinsic_matrix_for_rendering = intrinsic_south_2
@@ -1018,7 +1028,7 @@ class Neural3D_NDC_Dataset(Dataset):
                         new_extrinsic_up = shift_view(extrinsic_south_2, angle_deg=-img_index, axis='z')
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle, #
-                            'extrinsic_matrix': extrinsic_south_2, #update_inter,#enew_extrinsic_up, #new_extrinsic_up, #new_extrinsic_up, #new_extrinsic_up, #update_rotating_extrinsics, #novel_poses_per_image, #update_rotating_extrinsics,  #update_inter, # update_extrinsics, # #novel_poses[img_index], # #
+                            'extrinsic_matrix': extrinsic_south_2, #update_inter, #update_inter,#enew_extrinsic_up, #new_extrinsic_up, #new_extrinsic_up, #new_extrinsic_up, #update_rotating_extrinsics, #novel_poses_per_image, #update_rotating_extrinsics,  #update_inter, # update_extrinsics, # #novel_poses[img_index], # #
                             "projection_matrix": south_2_proj
                         }
                         N_time = len(image_files)
@@ -1276,6 +1286,7 @@ class Neural3D_NDC_Dataset(Dataset):
                         #intermediate_matrices = compute_intermediate_matrices_novel(E1, E2, num_intermediates=20)
                         update_inter_veh = intermediate_matrices[img_index]
 
+
                         if img_index < 3:
                             intrinsic_matrix_for_rendering = intrinsic_vehicle
                         else:
@@ -1285,7 +1296,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle,# #intrinsic_south_2, #
-                            'extrinsic_matrix': extrinsic_v, #update_inter_veh, #new_extrinsic_up, #extrinsic_v, #update_extrinsics_ve, #  , novel_poses_vehicle[img_index], # #
+                            'extrinsic_matrix': extrinsic_v, #update_inter_veh, #update_inter_veh, #new_extrinsic_up, #extrinsic_v, #update_extrinsics_ve, #  , novel_poses_vehicle[img_index], # #
                             "projection_matrix": vehicle_proj
                         }
                         N_time = len(image_files)
@@ -1396,14 +1407,16 @@ class Neural3D_NDC_Dataset(Dataset):
                         update_inter_veh = intermediate_matrices[img_index]
 
 
+
+
                         south_1_proj = np.asarray(
                             [[1279.275240545117, -862.9254609474538, -443.6558546306608, -16164.33175985643],
                              [-57.00793327192514, -67.92432779187584, -1461.785310749125, -806.9258947569469],
                              [0.7901272773742676, 0.3428181111812592, -0.508108913898468, 3.678680419921875]],
                             dtype=np.float32)
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_south_1,
-                            'extrinsic_matrix': camera_to_lidar_extrinsics_south_1, #update_inter_veh, #new_extrinsic_up, #s2_update_rotating_extrinsics, #camera_to_lidar_extrinsics_south_1,
+                            'intrinsic_matrix': intrinsic_south_2, #intrinsic_south_1,
+                            'extrinsic_matrix': camera_to_lidar_extrinsics_south_1, #update_inter_veh, #update_inter_veh, #new_extrinsic_up, #s2_update_rotating_extrinsics, #camera_to_lidar_extrinsics_south_1,
                             "projection_matrix": south_1_proj
                         }
                         N_time = len(image_files)

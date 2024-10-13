@@ -1,6 +1,13 @@
 
 ## Collaborative Dynamic Gaussian Splatting
 
+### SCENE 2 - Early fusion with collaboration (Row wise - GT, Rendered Depth, 4D Reconstruction)
+![3D Reconstruction Video](assets/Benchmark_SCENE_2_WITH_CP.gif)
+
+### SCENE 2 - Early fusion with collaboration - Novel View
+![3D Reconstruction Video](assets/novel_view.gif)
+
+
 - **Use Pre trained gaussian point cloud for initialization -> observed PSNR upto 38 beating everyone in the race**
 - Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
 - Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one. 
