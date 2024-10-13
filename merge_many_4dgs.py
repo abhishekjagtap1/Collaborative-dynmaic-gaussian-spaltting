@@ -173,7 +173,7 @@ parser.add_argument("--skip_video", action="store_true")
 parser.add_argument("--configs1", type=str, default="arguments/dynerf_9/flame_salmon_1.py")
 parser.add_argument("--configs2", type=str, default="arguments/dnerf_tv_2/hellwarrior.py")
 parser.add_argument("--modelpath2", type=str, default="output/dnerf_tv_2/hellwarrior")
-parser.add_argument("--configs3", type=str, default="arguments/dnerf_tv_2/mutant.py")
+parser.add_argument("--configs3", type=str, default="arguments/dynerf/default.py")
 parser.add_argument("--modelpath3", type=str, default="output/dnerf_tv_2/mutant")
 render_path = "output/editing_render_flame_salmon"
 
@@ -228,5 +228,5 @@ for index, viewpoint in tqdm(enumerate(scene1.getVideoCameras())):
     torchvision.utils.save_image(result["render"],os.path.join(render_path,f"output_image{index}.png"))
     
 imageio.mimwrite(os.path.join(render_path, 'video_rgb.mp4'), render_images, fps=30, codec='libx265') 
-    # points = get_state_at_time(gaussians, viewpoint)
+    #points = get_state_at_time(gaussians, viewpoint)
     # save_point_cloud(points, args.model_path, index)

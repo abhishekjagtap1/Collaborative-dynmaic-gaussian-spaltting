@@ -52,6 +52,43 @@ import numpy as np
 from time import time
 from tqdm import tqdm
 
+    def render_mesh(self, pose):
+
+        h = w = self.opt.output_size
+
+        v = self.v + self.deform
+        f = self.f
+
+        pose = torch.from_numpy(pose.astype(np.float32)).to(v.device)
+
+        # get v_clip and render rgb
+        v_cam = torch.matmul(F.pad(v, pad=(0, 1), mode='constant', value=1.0), torch.inverse(pose).T).float().unsqueeze(0)
+        v_clip = v_cam @ self.proj.T
+
+        rast, rast_db = dr.rasterize(self.glctx, v_clip, f, (h, w))
+
+        alpha = torch.clamp(rast[..., -1:], 0, 1).contiguous() # [1, H, W, 1]
+        alpha = dr.antialias(alpha, rast, v_clip, f).clamp(0, 1).squeeze(-1).squeeze(0) # [H, W] important to enable gradients!
+        
+        if self.albedo is None:
+            xyzs, _ = dr.interpolate(v.unsqueeze(0), rast, f) # [1, H, W, 3]
+            xyzs = xyzs.view(-1, 3)
+            mask = (alpha > 0).view(-1)
+            image = torch.zeros_like(xyzs, dtype=torch.float32)
+            if mask.any():
+                masked_albedo = torch.sigmoid(self.mlp(self.encoder(xyzs[mask].detach(), bound=1)))
+                image[mask] = masked_albedo.float()
+        else:
+            texc, texc_db = dr.interpolate(self.vt.unsqueeze(0), rast, self.ft, rast_db=rast_db, diff_attrs='all')
+            image = torch.sigmoid(dr.texture(self.albedo.unsqueeze(0), texc, uv_da=texc_db)) # [1, H, W, 3]
+
+        image = image.view(1, h, w, 3)
+        # image = dr.antialias(image, rast, v_clip, f).clamp(0, 1)
+        image = image.squeeze(0).permute(2, 0, 1).contiguous() # [3, H, W]
+        image = alpha * image + (1 - alpha)
+
+        return image, alpha
+
 
 
 
@@ -242,10 +279,11 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
 if __name__ == "__main__":
     # Set up command line argument parser
     parser = ArgumentParser(description="Testing script parameters")
+
     model = ModelParams(parser, sentinel=True)
     pipeline = PipelineParams(parser)
     hyperparam = ModelHiddenParams(parser)
-    parser.add_argument("--iteration", default=50000, type=int)
+    parser.add_argument("--iteration", default=5000, type=int)
     parser.add_argument("--skip_train", action="store_true")
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
