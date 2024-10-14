@@ -801,7 +801,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
         for root, dirs, files in os.walk(datadir):
             for dir in dirs:
-                if dir == "cam01":  # South 2
+                if dir == "cam08":  # South 2
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1315,7 +1315,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-                if dir == "cam03":  # South 1
+                if dir == "cam08":  # South 1
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1557,18 +1557,22 @@ class Neural3D_NDC_Dataset(Dataset):
             depth = None
         if self.flow_data:
             flow_path = self.flow_paths[index]
-            flow_tensor = np.load(flow_path)
-            #print(flow_tensor.keys())
-            flow_tensor = flow_tensor['flow'].astype(np.float32) #.transpose(2, 0, 1)
+            # print(flow_tensor.keys())
+            """            flow_tensor = flow_tensor['flow'].astype(np.float32)  # .transpose(2, 0, 1)
             # If you want to inspect all available keys in the .npz file
 
-            #.astype(np.float32)
-            #flow_tensor_ = self.transform(flow_tensor)
-            #flow_data =  Image.open(self.flow_paths[index])
-            #flow_data = flow_data.resize(self.img_wh, Image.LANCZOS)
-            flow = self.transform(flow_tensor)##Harself.transform(depth_image).float()dcoded for the moemmt now
+            # .astype(np.float32)
+            # flow_tensor_ = self.transform(flow_tensor)
+            # flow_data =  Image.open(self.flow_paths[index])
+            # flow_data = flow_data.resize(self.img_wh, Image.LANCZOS)
+            flow = self.transform(flow_tensor)  ##Harself.transform(depth_image).float()dcoded for the moemmt now
             optical_flow_mask = torch.tensor(flow, dtype=torch.float32)
             optical_flow_mask /= torch.max(torch.abs(optical_flow_mask))
+            """
+            #semantic_feature_name = os.path.basename(semantic_feature_path).split(".")[0]
+            semantic_feature = torch.load(flow_path)
+
+
         if self.semantic_data:
             sam_masks = torch.load(self.semantic_paths[index])
 
@@ -1581,7 +1585,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
 
 
-        return img, self.image_poses[index], self.image_times[index], depth_tensor, optical_flow_mask, sam_masks
+        return img, self.image_poses[index], self.image_times[index], depth_tensor, semantic_feature, sam_masks
     def load_pose(self,index):
         pose = self.image_poses[index] #
         extrinsic_matrix = pose['extrinsic_matrix']

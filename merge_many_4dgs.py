@@ -31,7 +31,7 @@ from copy import deepcopy
 import torch
 import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
-from scene.gaussian_model import GaussianModel
+from scene.gaussian_model_original import GaussianModel
 from utils.render_utils import get_state_at_time
 from tqdm import tqdm
 def rotate_point_cloud(point_cloud, displacement, rotation_angles, scales_bias):

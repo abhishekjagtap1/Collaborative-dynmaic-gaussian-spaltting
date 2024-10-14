@@ -31,6 +31,7 @@ from utils.scene_utils import render_training_image
 from time import time
 import copy
 from utils.general_utils import get_expon_lr_func
+import torch.nn.functional as F
 
 to8b = lambda x: (255 * np.clip(x.cpu().numpy(), 0, 1)).astype(np.uint8)
 
@@ -189,6 +190,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         flow_gtsss = []
         visibility_filter_list = []
         viewspace_point_tensor_list = []
+        """
+        Dumb way to append feature maps
+        """
+        feature_maps = []
         ################################ Gaussian parameter at t2
 
         # Initialize 't2' dictionary to store the latest values across iterations
@@ -197,33 +202,43 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             "gs_per_pixel": None,
             "weight_per_gs_pixel": None
         }
+        """
+        Load data semantic features
+                gt_feature_map = viewpoint_cam.semantic_feature.cuda()
+        feature_map = F.interpolate(feature_map.unsqueeze(0), size=(gt_feature_map.shape[1], gt_feature_map.shape[2]), mode='bilinear', align_corners=True).squeeze(0) 
+        if dataset.speedup:
+            feature_map = cnn_decoder(feature_map)
+        Ll1_feature = l1_loss(feature_map, gt_feature_map) 
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) + 1.0 * Ll1_feature 
+        """
         for viewpoint_cam in viewpoint_cams:
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage, cam_type=scene.dataset_type)
             # image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-            image, viewspace_point_tensor, visibility_filter, radii, proj_2D_t_1, gs_per_pixel, weight_per_gs_pixel, x_mu, cov2D_inv_t_1, cov2D_t_2 = \
-            render_pkg["render"], render_pkg[
-                "viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"], render_pkg["proj_2D"], \
-            render_pkg["gs_per_pixel"].long(), render_pkg["weight_per_gs_pixel"], render_pkg["x_mu"], render_pkg[
-                "conic_2D"].detach(), render_pkg["conic_2D_inv"]
+
+            image, viewspace_point_tensor, visibility_filter, radii, depth, feature_map = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"], \
+                                                                                            render_pkg["depth"], render_pkg["feature_map"]
+
+            #image, viewspace_point_tensor, visibility_filter, radii, proj_2D_t_1, gs_per_pixel, weight_per_gs_pixel, x_mu, cov2D_inv_t_1, cov2D_t_2 = \
+            #render_pkg["render"], render_pkg[
+             #   "viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"], render_pkg["proj_2D"], \
+            #render_pkg["gs_per_pixel"].long(), render_pkg["weight_per_gs_pixel"], render_pkg["x_mu"], render_pkg[
+             #   "conic_2D"].detach(), render_pkg["conic_2D_inv"]
 
             images.append(image.unsqueeze(0))
+            #feature_maps.append((feature_map.unsqueeze(0)))
             if scene.dataset_type != "PanopticSports":
                 gt_image = viewpoint_cam.original_image.cuda()
-                flow_gt = viewpoint_cam.flow.cuda()
+                #flow_gt = viewpoint_cam.flow.cuda()
                 depth_gt = viewpoint_cam.depth.cuda()
             else:
                 gt_image = viewpoint_cam['image'].cuda()
                 # flow_gt = viewpoint_cam["flow"].cuda()
                 flow_gt = viewpoint_cam.flow.cuda()
+                depth_gt = viewpoint_cam.depth.cuda()
 
             gt_images.append(gt_image.unsqueeze(0))
             flow_gtsss.append(flow_gt.unsqueeze(0))
             gt_depths.append(depth_gt.unsqueeze(0))
-
-            # Update the t2 dictionary with the latest values (overwriting each iteration)
-            t2["proj_2D_t_1"] = proj_2D_t_1
-            t2["cov2D_inv_t_2"] = cov2D_inv_t_1
-            t2["cov2D_t_2"] = cov2D_t_2
 
             # flow_gtsss.append(flow_gt.unsqueeze(0))
             radii_list.append(radii.unsqueeze(0))
@@ -251,8 +266,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         flow_gt_tensor = torch.cat(flow_gtsss, 0)
         depth_gt_tensorr = torch.cat(gt_depths, 0)
         rendered_depth_tensor = torch.cat(rnd_depth, 0)
+        #rendered_feature_tensor = torch.cat(feature_maps, 0)
 
         Ll1 = l1_loss(image_tensor, gt_image_tensor[:, :3, :, :])
+
+
         """
 
 
@@ -410,6 +428,21 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                                             max_steps=opt.iterations)
 
         loss = Ll1
+
+        #gt_feature_map = viewpoint_cam.flow.cuda()
+        #flow_gt_tensor
+        feature_map_tensor_ge = F.interpolate(feature_maps.unsqueeze(0),
+                                    size=(flow_gt_tensor.shape[1], flow_gt_tensor.shape[2]), mode='bilinear',
+                                    align_corners=True).squeeze(0)
+        print("Logging Feature supervision")
+        if dataset.speedup:
+            """
+            To do implement own encoder decoder
+            """
+            #feature_map = cnn_decoder(feature_map)
+        Ll1_feature = l1_loss(feature_map_tensor_ge, flow_gt_tensor)
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) + 1.0 * Ll1_feature
+
         if stage == "fine" and iteration % 100 == 0:
             print("Logging Depth supervision")
             Ll1depth_pure = torch.abs((rendered_depth_tensor - depth_gt_tensorr).mean())
@@ -418,6 +451,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             Ll1depth = depth_l1_weight(iteration) * Ll1depth_pure
             loss += Ll1depth
             Ll1depth = Ll1depth.item()
+
+
+
         else:
             Ll1depth = 0.0
 
@@ -613,6 +649,7 @@ def prepare_output_and_logger(expname):
         # else:
         #     unique_str = str(uuid.uuid4())
         unique_str = expname
+
 
         args.model_path = os.path.join("./output/", unique_str)
     # Set up output folder
