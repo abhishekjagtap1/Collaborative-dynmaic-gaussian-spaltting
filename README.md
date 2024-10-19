@@ -1,9 +1,12 @@
 
-## Collaborative Dynamic Gaussian Splatting
-
-- **Use Pre trained gaussian point cloud for initialization -> observed PSNR upto 38 beating everyone in the race**
-- Use `getprojectionmatrix2` for training and evaluation. Update `NoneType` error when opening SIBR viewer using this setting.
-- Do not downsample points. Instead, reduce the bounds and use point painting of the same LiDAR, not a general one. 
+## Collaborative Dynamic Gaussian Splatting - Feature Rasetrization
+```python
+pip install submodules/diff-gaussian-rasterization-feature # Rasterizer for RGB, n-dim feature, depth
+```
+- **Update submodules/diff-gaussian-rasterization-feature/cuda_rasterizer/config.h for 256 dim**
+- make sure to build thw wheel for diff-gaussian-rasterization-feature again
+- A separate fork of our rasterizer needs to updated in git - Pending
+- Gaussian Model updated for semantic features
 
 ## Benchmarking Time
 - **Use 20 seconds clip as used by Waymo, nuscenes for evaluation**
