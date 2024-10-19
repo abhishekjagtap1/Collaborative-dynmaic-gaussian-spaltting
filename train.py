@@ -30,6 +30,7 @@ import lpips
 from utils.scene_utils import render_training_image
 from time import time
 import copy
+import torch.nn.functional as F
 
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
@@ -175,6 +176,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         if (iteration - 1) == debug_from:
             pipe.debug = True
         images = []
+        feature_maps = []
         gt_images = []
         rnd_depth = []
         gt_depths = []
@@ -193,11 +195,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         for viewpoint_cam in viewpoint_cams:
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,cam_type=scene.dataset_type)
             #image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-            image, viewspace_point_tensor, visibility_filter, radii, proj_2D_t_1, gs_per_pixel, weight_per_gs_pixel, x_mu, cov2D_inv_t_1, cov2D_t_2 = render_pkg["render"], render_pkg[
-                                                                    "viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"], render_pkg["proj_2D"], render_pkg["gs_per_pixel"].long(), render_pkg["weight_per_gs_pixel"], render_pkg["x_mu"], render_pkg["conic_2D"].detach(), render_pkg["conic_2D_inv"]
 
 
-            images.append(image.unsqueeze(0))
             if scene.dataset_type!="PanopticSports":
                 gt_image = viewpoint_cam.original_image.cuda()
                 flow_gt = viewpoint_cam.flow.cuda()
@@ -207,11 +206,16 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             
             gt_images.append(gt_image.unsqueeze(0))
             flow_gtsss.append(flow_gt.unsqueeze(0))
+            image, viewspace_point_tensor, visibility_filter, radii, depth, feature_map = render_pkg["render"], \
+            render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"], render_pkg["depth"], \
+            render_pkg["feature_map"]
 
-            # Update the t2 dictionary with the latest values (overwriting each iteration)
-            t2["proj_2D_t_1"] = proj_2D_t_1
-            t2["cov2D_inv_t_2"] = cov2D_inv_t_1
-            t2["cov2D_t_2"] = cov2D_t_2
+            #image, viewspace_point_tensor, visibility_filter, radii, proj_2D_t_1, gs_per_pixel, weight_per_gs_pixel, x_mu, cov2D_inv_t_1, cov2D_t_2 = render_pkg["render"], render_pkg[
+             #                                                       "viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"], render_pkg["proj_2D"], render_pkg["gs_per_pixel"].long(), render_pkg["weight_per_gs_pixel"], render_pkg["x_mu"], render_pkg["conic_2D"].detach(), render_pkg["conic_2D_inv"]
+
+
+            images.append(image.unsqueeze(0))
+            feature_maps.append(feature_map.unsqueeze(0))
 
 
             #flow_gtsss.append(flow_gt.unsqueeze(0))
@@ -239,8 +243,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
         image_tensor = torch.cat(images,0)
+        feature_tensor = torch.cat(feature_maps,0)
         gt_image_tensor = torch.cat(gt_images,0)
         flow_gt_tensor = torch.cat(flow_gtsss, 0)
+        feature_tensor = F.interpolate(feature_tensor, size=(flow_gt_tensor.shape[2], flow_gt_tensor.shape[3]),
+                                    mode='bilinear', align_corners=True) #.squeeze(0)
+        shat = None
         """
         
         
@@ -283,6 +291,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
 
         Ll1 = l1_loss(image_tensor, gt_image_tensor[:,:3,:,:])
+        Ll1_feature = l1_loss(feature_tensor, flow_gt_tensor)
 
         """        #L_FLOW_LOSS = end_point_error()
 
@@ -411,7 +420,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         """
 
                 # flow_weight could be 1, 0.1, ... whatever you want.
-        loss = Ll1
+        loss = Ll1 + Ll1_feature
 
         if stage == "fine" and hyper.time_smoothness_weight != 0:
             # tv_loss = 0

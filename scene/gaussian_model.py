@@ -64,7 +64,9 @@ class GaussianModel:
         self.percent_dense = 0
         self.spatial_lr_scale = 0
         self._deformation_table = torch.empty(0)
+        self._semantic_feature = torch.empty(0)
         self.setup_functions()
+
 
     def capture(self):
         return (
@@ -83,6 +85,7 @@ class GaussianModel:
             self.denom,
             self.optimizer.state_dict(),
             self.spatial_lr_scale,
+            self._semantic_feature,
         )
     
     def restore(self, model_args, training_args):
@@ -101,7 +104,8 @@ class GaussianModel:
         xyz_gradient_accum, 
         denom,
         opt_dict, 
-        self.spatial_lr_scale) = model_args
+        self.spatial_lr_scale,
+        self._semantic_feature ) = model_args
         self._deformation.load_state_dict(deform_state)
         self.training_setup(training_args)
         self.xyz_gradient_accum = xyz_gradient_accum
@@ -125,6 +129,12 @@ class GaussianModel:
         features_dc = self._features_dc
         features_rest = self._features_rest
         return torch.cat((features_dc, features_rest), dim=1)
+
+    def get_semantic_feature(self):
+        return self._semantic_feature
+
+    def rewrite_semantic_feature(self, x):
+        self._semantic_feature = x
     
     @property
     def get_opacity(self):
@@ -146,6 +156,8 @@ class GaussianModel:
         features[:, :3, 0 ] = fused_color
         features[:, 3:, 1:] = 0.0
 
+        self._semantic_feature = torch.zeros(fused_point_cloud.shape[0], 256, 1).float().cuda() #semantic_feature size set to 64 or 256
+
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
@@ -164,12 +176,14 @@ class GaussianModel:
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self._semantic_feature = nn.Parameter(self._semantic_feature.transpose(1, 2).contiguous().requires_grad_(True))
         self._deformation_table = torch.gt(torch.ones((self.get_xyz.shape[0]),device="cuda"),0)
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
         self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self._deformation_accum = torch.zeros((self.get_xyz.shape[0],3),device="cuda")
+
         
 
         l = [
@@ -180,7 +194,8 @@ class GaussianModel:
             {'params': [self._features_rest], 'lr': training_args.feature_lr / 20.0, "name": "f_rest"},
             {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
             {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
-            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
+            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
+            {'params': [self._semantic_feature], 'lr': training_args.semantic_feature_lr, "name": "semantic_feature"},
             
         ]
 
@@ -226,7 +241,12 @@ class GaussianModel:
             l.append('scale_{}'.format(i))
         for i in range(self._rotation.shape[1]):
             l.append('rot_{}'.format(i))
+
+        # Add semantic features
+        for i in range(self._semantic_feature.shape[1]*self._semantic_feature.shape[2]):
+            l.append('semantic_{}'.format(i))
         return l
+
     def compute_deformation(self,time):
         
         deform = self._deformation[:,:,:time].sum(dim=-1)
@@ -262,11 +282,14 @@ class GaussianModel:
         opacities = self._opacity.detach().cpu().numpy()
         scale = self._scaling.detach().cpu().numpy()
         rotation = self._rotation.detach().cpu().numpy()
-        
+
+        semantic_feature = self._semantic_feature.detach().transpose(1, 2).flatten(
+            start_dim=1).contiguous().cpu().numpy()
+
         dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
 
         elements = np.empty(xyz.shape[0], dtype=dtype_full)
-        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
+        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation, semantic_feature), axis=1)
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
@@ -288,6 +311,12 @@ class GaussianModel:
         features_dc[:, 0, 0] = np.asarray(plydata.elements[0]["f_dc_0"])
         features_dc[:, 1, 0] = np.asarray(plydata.elements[0]["f_dc_1"])
         features_dc[:, 2, 0] = np.asarray(plydata.elements[0]["f_dc_2"])
+
+        count = sum(1 for name in plydata.elements[0].data.dtype.names if name.startswith("semantic_"))
+        semantic_feature = np.stack([np.asarray(plydata.elements[0][f"semantic_{i}"]) for i in range(count)], axis=1)
+        semantic_feature = np.expand_dims(semantic_feature, axis=-1)
+
+
 
         extra_f_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("f_rest_")]
         extra_f_names = sorted(extra_f_names, key = lambda x: int(x.split('_')[-1]))
@@ -316,6 +345,8 @@ class GaussianModel:
         self._opacity = nn.Parameter(torch.tensor(opacities, dtype=torch.float, device="cuda").requires_grad_(True))
         self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device="cuda").requires_grad_(True))
         self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device="cuda").requires_grad_(True))
+        self._semantic_feature = nn.Parameter(
+            torch.tensor(semantic_feature, dtype=torch.float, device="cuda").transpose(1,2).contiguous().requires_grad_(True))
         self.active_sh_degree = self.max_sh_degree
 
     def replace_tensor_to_optimizer(self, tensor, name):
@@ -366,6 +397,7 @@ class GaussianModel:
         self._deformation_accum = self._deformation_accum[valid_points_mask]
         self.xyz_gradient_accum = self.xyz_gradient_accum[valid_points_mask]
         self._deformation_table = self._deformation_table[valid_points_mask]
+        self._semantic_feature = optimizable_tensors["semantic_feature"]
         self.denom = self.denom[valid_points_mask]
         self.max_radii2D = self.max_radii2D[valid_points_mask]
 
@@ -392,13 +424,14 @@ class GaussianModel:
 
         return optimizable_tensors
 
-    def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table):
+    def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table, new_semantic_feature):
         d = {"xyz": new_xyz,
         "f_dc": new_features_dc,
         "f_rest": new_features_rest,
         "opacity": new_opacities,
         "scaling" : new_scaling,
         "rotation" : new_rotation,
+        "semantic_feature": new_semantic_feature
         # "deformation": new_deformation
        }
 
@@ -410,7 +443,8 @@ class GaussianModel:
         self._scaling = optimizable_tensors["scaling"]
         self._rotation = optimizable_tensors["rotation"]
         # self._deformation = optimizable_tensors["deformation"]
-        
+        self._semantic_feature = optimizable_tensors["semantic_feature"]
+
         self._deformation_table = torch.cat([self._deformation_table,new_deformation_table],-1)
         self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self._deformation_accum = torch.zeros((self.get_xyz.shape[0], 3), device="cuda")
@@ -440,7 +474,8 @@ class GaussianModel:
         new_features_rest = self._features_rest[selected_pts_mask].repeat(N,1,1)
         new_opacity = self._opacity[selected_pts_mask].repeat(N,1)
         new_deformation_table = self._deformation_table[selected_pts_mask].repeat(N)
-        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation, new_deformation_table)
+        new_semantic_feature = self._semantic_feature[selected_pts_mask].repeat(N, 1, 1)
+        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation, new_deformation_table, new_semantic_feature)
 
         prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
         self.prune_points(prune_filter)
@@ -480,9 +515,10 @@ class GaussianModel:
         new_scaling = self._scaling[selected_pts_mask]
         new_rotation = self._rotation[selected_pts_mask]
         new_deformation_table = self._deformation_table[selected_pts_mask]
+        new_semantic_feature = self._semantic_feature[selected_pts_mask]
         # if opt.add_point:
         # selected_xyz, grow_xyz = self.add_point_by_mask(selected_pts_mask_grow.to(self.get_xyz.device), self.displacement_scale)
-        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table)
+        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table, new_semantic_feature)
         # print("被动增加点云：",selected_xyz.shape[0])
         # print("主动增加点云：",selected_pts_mask.sum())
         # if model_path is not None and iteration is not None:

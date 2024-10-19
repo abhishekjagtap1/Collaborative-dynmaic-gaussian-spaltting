@@ -456,7 +456,8 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     """
     Use pretrained gaussian point clouds for init
     """
-    ply_path = "/home/uchihadj/ECCV_workshop/splatviz/_ply_files/first_trained_iter.ply"
+    #ply_path = "/home/uchihadj/ECCV_workshop/splatviz/_ply_files/first_trained_iter.ply"
+    ply_path = "/home/uchihadj/ECCV_workshop/sumne_/splatviz/_ply_files/model_2.ply"
 
 
     """

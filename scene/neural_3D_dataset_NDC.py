@@ -979,7 +979,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
 
 
-                if dir == "cam08":
+                if dir == "cam02":
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1207,7 +1207,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-                if dir == "cam08":  # South 1
+                if dir == "cam03":  # South 1
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1282,8 +1282,8 @@ class Neural3D_NDC_Dataset(Dataset):
                              [0.7901272773742676, 0.3428181111812592, -0.508108913898468, 3.678680419921875]],
                             dtype=np.float32)
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_south_1,
-                            'extrinsic_matrix': new_extrinsic_up, #s2_update_rotating_extrinsics, #camera_to_lidar_extrinsics_south_1,
+                            'intrinsic_matrix': intrinsic_south_2,
+                            'extrinsic_matrix': camera_to_lidar_extrinsics_south_1, #new_extrinsic_up, #s2_update_rotating_extrinsics, #camera_to_lidar_extrinsics_south_1,
                             "projection_matrix": south_1_proj
                         }
                         N_time = len(image_files)
@@ -1411,9 +1411,9 @@ class Neural3D_NDC_Dataset(Dataset):
             depth = None
         if self.flow_data:
             flow_path = self.flow_paths[index]
-            flow_tensor = np.load(flow_path)
+            #flow_tensor = np.load(flow_path)
             #print(flow_tensor.keys())
-            flow_tensor = flow_tensor['flow'].astype(np.float32) #.transpose(2, 0, 1)
+            #flow_tensor = flow_tensor['flow'].astype(np.float32) #.transpose(2, 0, 1)
 
 
 
@@ -1423,14 +1423,16 @@ class Neural3D_NDC_Dataset(Dataset):
             #flow_tensor_ = self.transform(flow_tensor)
             #flow_data =  Image.open(self.flow_paths[index])
             #flow_data = flow_data.resize(self.img_wh, Image.LANCZOS)
-            flow = self.transform(flow_tensor)##Harself.transform(depth_image).float()dcoded for the moemmt now
-            optical_flow_mask = torch.tensor(flow, dtype=torch.float32)
-            optical_flow_mask /= torch.max(torch.abs(optical_flow_mask))
+            #flow = self.transform(flow_tensor)##Harself.transform(depth_image).float()dcoded for the moemmt now
+            #optical_flow_mask = torch.tensor(flow, dtype=torch.float32)
+            #optical_flow_mask /= torch.max(torch.abs(optical_flow_mask))
+            semantic_feature = torch.load(flow_path).float()
+
 
 
         img = self.transform(img)
 
-        return img, self.image_poses[index], self.image_times[index], depth, optical_flow_mask
+        return img, self.image_poses[index], self.image_times[index], depth, semantic_feature
     def load_pose(self,index):
         pose = self.image_poses[index] #
         extrinsic_matrix = pose['extrinsic_matrix']

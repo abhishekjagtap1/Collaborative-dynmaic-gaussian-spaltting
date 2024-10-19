@@ -33,6 +33,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     # Set up rasterization configuration
     
     means3D = pc.get_xyz
+
     if cam_type != "PanopticSports":
         tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
         tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
@@ -115,6 +116,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             # shs = 
     else:
         colors_precomp = override_color
+    semantic_feature = pc.get_semantic_feature()
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     # time3 = get_time()
@@ -136,7 +138,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     """
     Flow based rsterizer
     """
-    rendered_image, radii, rendered_depth, rendered_alpha, proj_means_2D, conic_2D, conic_2D_inv, gs_per_pixel, weight_per_gs_pixel, x_mu = rasterizer(
+    """    rendered_image, radii, rendered_depth, rendered_alpha, proj_means_2D, conic_2D, conic_2D_inv, gs_per_pixel, weight_per_gs_pixel, x_mu = rasterizer(
         means3D=means3D_final,
         means2D=means2D,
         shs=shs_final,
@@ -145,6 +147,19 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         scales=scales_final,
         rotations=rotations_final,
         cov3D_precomp=cov3D_precomp)
+        """
+
+    rendered_image, feature_map, radii, rendered_depth = rasterizer(
+        means3D=means3D_final,
+        means2D=means2D,
+        shs=shs_final,
+        colors_precomp=colors_precomp,
+        semantic_feature=semantic_feature,
+        opacities=opacity,
+        scales=scales_final,
+        rotations=rotations_final,
+        cov3D_precomp=cov3D_precomp
+    )
     # time4 = get_time()
     # print("rasterization:",time4-time3)
     # breakpoint()
@@ -169,12 +184,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "visibility_filter": radii > 0,
             "radii": radii,
             "depth": rendered_depth,
-            "proj_2D": proj_means_2D,
-            "gs_per_pixel": gs_per_pixel,
-            "weight_per_gs_pixel": weight_per_gs_pixel,
-            "x_mu": x_mu,
-            "conic_2D": conic_2D,
-            "conic_2D_inv": conic_2D_inv
-            }
-
+            "feature_map": feature_map
+      }
 
