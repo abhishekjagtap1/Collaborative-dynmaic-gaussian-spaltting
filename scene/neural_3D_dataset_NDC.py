@@ -10,6 +10,8 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms as T
 from tqdm import tqdm
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 """
 Important Notes:
@@ -510,6 +512,225 @@ def generate_intermediate_posesshortest(E1, E2, n_poses=12):
         poses.append(pose)
 
     return poses
+def shift_view(extrinsic_matrix, angle_deg=10, axis='y'):
+    """
+    Shift the camera view by rotating around the specified axis (X, Y, or Z),
+    while keeping the camera's position fixed.
+
+    Parameters:
+    - extrinsic_matrix: The original 4x4 extrinsic matrix.
+    - angle_deg: The angle (in degrees) to rotate the view (default is 10°).
+    - axis: The axis to rotate around ('x', 'y', or 'z') (default is 'y' for left/right shift).
+
+    Returns:
+    - new_extrinsic: The new extrinsic matrix after rotating the view.
+    """
+    # Extract the rotation matrix and translation vector
+    rotation_matrix = extrinsic_matrix[:3, :3]
+    translation_vector = extrinsic_matrix[:3, 3]
+
+    # Define a rotation matrix around the specified axis
+    def rotation_around_axis(angle_deg, axis):
+        angle_rad = np.radians(angle_deg)
+        cos_a = np.cos(angle_rad)
+        sin_a = np.sin(angle_rad)
+
+        if axis == 'y':
+            # Rotation around the Y-axis (up-down shift or left-right)
+            return np.array([[cos_a, 0, sin_a],
+                             [0, 1, 0],
+                             [-sin_a, 0, cos_a]], dtype=np.float32)
+        elif axis == 'x':
+            # Rotation around the X-axis (tilt up-down)
+            return np.array([[1, 0, 0],
+                             [0, cos_a, -sin_a],
+                             [0, sin_a, cos_a]], dtype=np.float32)
+        elif axis == 'z':
+            # Rotation around the Z-axis (roll right or left)
+            return np.array([[cos_a, -sin_a, 0],
+                             [sin_a, cos_a, 0],
+                             [0, 0, 1]], dtype=np.float32)
+        else:
+            raise ValueError(f"Invalid axis: {axis}. Choose from 'x', 'y', or 'z'.")
+
+    # Generate the rotation matrix based on the chosen axis and angle
+    rotation_matrix_shift = rotation_around_axis(angle_deg, axis)
+
+    # Apply the rotation to the original rotation matrix
+    new_rotation_matrix = np.dot(rotation_matrix_shift, rotation_matrix)
+
+    # Create the new extrinsic matrix
+    new_extrinsic = np.eye(4, dtype=np.float32)
+    new_extrinsic[:3, :3] = new_rotation_matrix  # Set the new rotation
+    new_extrinsic[:3, 3] = translation_vector  # Keep the translation the same
+
+    return new_extrinsic
+
+
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+
+def slerp(q1, q2, t):
+    """
+    Perform spherical linear interpolation (slerp) between two quaternions.
+
+    Parameters:
+        q1 (np.ndarray): Quaternion at t=0 (as a 4-element array).
+        q2 (np.ndarray): Quaternion at t=1 (as a 4-element array).
+        t (float): Interpolation factor between 0 and 1.
+
+    Returns:
+        np.ndarray: Interpolated quaternion.
+    """
+    # Compute the cosine of the angle between the two quaternions
+    dot_product = np.dot(q1, q2)
+
+    # If the dot product is negative, reverse one quaternion to take the shorter path
+    if dot_product < 0.0:
+        q1 = -q1
+        dot_product = -dot_product
+
+    # Clamp dot product to avoid numerical errors
+    dot_product = np.clip(dot_product, -1.0, 1.0)
+
+    # Calculate the angle between the quaternions
+    theta_0 = np.arccos(dot_product)
+    sin_theta_0 = np.sin(theta_0)
+
+    # If the angle is very small, use linear interpolation
+    if sin_theta_0 < 1e-6:
+        return (1.0 - t) * q1 + t * q2
+
+    # Perform slerp interpolation
+    theta = theta_0 * t
+    sin_theta = np.sin(theta)
+
+    s1 = np.sin((1.0 - t) * theta_0) / sin_theta_0
+    s2 = sin_theta / sin_theta_0
+
+    return s1 * q1 + s2 * q2
+
+
+def generate_novel_views_slerp(extrinsic_1, extrinsic_2, num_views=50):
+    """
+    Generate novel views by interpolating between two extrinsic matrices.
+
+    Parameters:
+        extrinsic_1 (np.ndarray): First extrinsic matrix (4x4).
+        extrinsic_2 (np.ndarray): Second extrinsic matrix (4x4).
+        num_views (int): Number of novel views to generate (default is 50).
+
+    Returns:
+        list of np.ndarray: List of interpolated extrinsic matrices (4x4 each).
+    """
+    # Extract rotation and translation components
+    R1 = extrinsic_1[:3, :3]
+    t1 = extrinsic_1[:3, 3]
+    R2 = extrinsic_2[:3, :3]
+    t2 = extrinsic_2[:3, 3]
+
+    # Convert rotation matrices to quaternions
+    q1 = R.from_matrix(R1).as_quat()
+    q2 = R.from_matrix(R2).as_quat()
+
+    # Interpolation factors between 0 and 1
+    interpolation_factors = np.linspace(0, 1, num_views)
+
+    # Initialize list for novel views
+    novel_views = []
+
+    # Interpolate each view
+    for t in interpolation_factors:
+        # Slerp interpolation for the quaternion
+        q_interpolated = slerp(q1, q2, t)
+        R_interpolated = R.from_quat(q_interpolated).as_matrix()
+
+        # Linear interpolation for translation
+        t_interpolated = (1 - t) * t1 + t * t2
+
+        # Create the extrinsic matrix for the interpolated pose
+        extrinsic_matrix = np.eye(4)
+        extrinsic_matrix[:3, :3] = R_interpolated
+        extrinsic_matrix[:3, 3] = t_interpolated
+
+        # Append to list of novel views
+        novel_views.append(extrinsic_matrix)
+
+    return novel_views
+
+"""
+Nerf Spiral
+"""
+
+
+def normalize(v):
+    return v / np.linalg.norm(v)
+
+
+def average_poses(poses):
+    """
+    Compute an average pose from a set of poses.
+    """
+    center = poses[:, :3, 3].mean(0)
+    rotation_matrix = R.from_matrix(poses[:, :3, :3]).mean().as_matrix()
+    avg_pose = np.eye(4)
+    avg_pose[:3, :3] = rotation_matrix
+    avg_pose[:3, 3] = center
+    return avg_pose
+
+
+def render_path_spiral_new(c2w, up, rads, focal, zdelta, zrate, N=120):
+    """
+    Generate a list of camera poses following a spiral path.
+    """
+    render_poses = []
+    for theta in np.linspace(0, 2 * np.pi * zrate, N):
+        c = np.array([np.cos(theta), -np.sin(theta), -np.sin(theta * 0.5)]) * rads
+        z = normalize(c2w[:3, 2]) * zdelta
+        pos = c + z + c2w[:3, 3]
+
+        look_at = c2w[:3, 3]  # Look towards the center
+        forward = normalize(look_at - pos)
+        right = normalize(np.cross(up, forward))
+        up_adjusted = np.cross(forward, right)
+
+        # Build the 4x4 transformation matrix for this pose
+        pose = np.eye(4)
+        pose[:3, 0] = right
+        pose[:3, 1] = up_adjusted
+        pose[:3, 2] = forward
+        pose[:3, 3] = pos
+        render_poses.append(pose)
+
+    return render_poses
+
+
+def get_spiral_poses_new(extrinsic_1, extrinsic_2, near_fars, rads_scale=1.0, N_views=120):
+    """
+    Generate a set of poses using a spiral camera trajectory.
+    """
+    # Stack the two extrinsic matrices to get an array of poses
+    c2ws_all = np.stack([extrinsic_1, extrinsic_2])
+
+    # Get average pose and compute the 'up' vector
+    c2w = average_poses(c2ws_all)
+    up = normalize(c2ws_all[:, :3, 1].sum(0))
+
+    # Find the focal depth
+    dt = 0.75
+    close_depth, inf_depth = near_fars.min() * 0.9, near_fars.max() * 5.0
+    focal = 1.0 / ((1.0 - dt) / close_depth + dt / inf_depth)
+
+    # Calculate radii and depth delta for spiral path
+    zdelta = near_fars.min() * 0.2
+    tt = c2ws_all[:, :3, 3]
+    rads = np.percentile(np.abs(tt), 90, 0) * rads_scale
+
+    # Generate the spiral path
+    render_poses = render_path_spiral_new(c2w, up, rads, focal, zdelta, zrate=0.5, N=N_views)
+
+    return np.stack(render_poses)
 
 
 class Neural3D_NDC_Dataset(Dataset):
@@ -604,16 +825,9 @@ class Neural3D_NDC_Dataset(Dataset):
                 poses_i_train.append(i)
         self.poses = poses[poses_i_train]
         self.poses_all = poses
-        self.image_paths, self.image_poses, self.image_times, N_cam, N_time, self.depth_paths = self.load_images_path(datadir, self.split)
+        self.image_paths, self.image_poses, self.image_times, self.depth_paths = self.load_images_path(datadir, self.split)
         extract_pose  = [] #self.image_poses
-        for i in range(N_time):
-            extrinsic_matrix_poses = self.image_poses[i]['extrinsic_matrix']
-            R = extrinsic_matrix_poses[:3, :3]  # np.transpose(extrinsic_matrix[:3, :3])
-            T = extrinsic_matrix_poses[:3, 3]
-            pose_matrix = np.hstack((R, T.reshape(3, 1)))
-            extract_pose.append(pose_matrix)
-        render_poses = np.stack(extract_pose)
-        self.val_poses = get_spiral(render_poses, self.near_fars, N_views=N_views)
+
 
         """
         Render novel poses for validation 
@@ -625,9 +839,6 @@ class Neural3D_NDC_Dataset(Dataset):
                                                    vehicle=False)
         """
 
-
-        self.cam_number = N_cam
-        self.time_number = N_time
     def get_val_pose(self):
         render_poses = self.val_poses
         render_times = torch.linspace(0.0, 1.0, render_poses.shape[0]) * 2.0 - 1.0
@@ -644,10 +855,11 @@ class Neural3D_NDC_Dataset(Dataset):
 
         for root, dirs, files in os.walk(datadir):
             for dir in dirs:
-                if dir == "cam01":  # South 2
+                if dir == "cam08":  # South 2
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
+                    #image_files = image_files[:20]  # hardcode to take only first 20 samples
                     this_count = 0
                     #image_files = image_files[:20] #hardcode to take only first 20 samples
                     #image_files = image_files[20:50]
@@ -780,11 +992,30 @@ class Neural3D_NDC_Dataset(Dataset):
                         intrinsic_vehicle = np.asarray([[2726.55, 0.0, 685.235],
                                                         [0.0, 2676.64, 262.745],
                                                         [0.0, 0.0, 1.0]], dtype=np.float32)
+                        transformation_matrix_base_to_camera_south_1 = np.array([
+                            [0.891382638626301, 0.37756862104528707, -0.07884507325924934, 25.921784677055939],
+                            [0.2980421080238165, -0.6831891949380544, -0.6660273169946723, 13.668310799382738],
+                            [-0.24839844089507856, 0.5907739097931769, -0.7525203649548087, 18.630430017833277],
+                            [0, 0, 0, 1]], dtype=float)
+                        transformation_matrix_lidar_to_base_south_1 = np.array([
+                            [0.247006, -0.955779, -0.15961, -16.8017],
+                            [0.912112, 0.173713, 0.371316, 4.66979],
+                            [-0.327169, -0.237299, 0.914685, 6.4602],
+                            [0.0, 0.0, 0.0, 1.0], ], dtype=float)
 
-                        intermediate_matrices = compute_intermediate_matrices(E1, E_dynamic, num_intermediates=len(image_files))
+                        extrinsic_matrix_lidar_to_camera_south_1 = np.matmul(
+                            transformation_matrix_base_to_camera_south_1,
+                            transformation_matrix_lidar_to_base_south_1)
+                        camera_to_lidar_extrinsics_south_1 = np.linalg.inv(extrinsic_matrix_lidar_to_camera_south_1)
+
+                        intermediate_matrices = compute_intermediate_matrices(E1, camera_to_lidar_extrinsics_south_1, num_intermediates=len(image_files))
                         #intermediate_matrices = generate_intermediate_posesshortest(E1, E_dynamic, n_poses=len(image_files))
 
                         #intermediate_matrices = compute_intermediate_matrices_novel(E2, E1, num_intermediates=20)
+
+                        new_extrinsic_up = shift_view(extrinsic_south_2, angle_deg=-img_index, axis='z')
+                        near_fars = np.array([0.01, 100.0])
+                        novel_views = generate_novel_views_slerp(extrinsic_south_2, camera_to_lidar_extrinsics_south_1, num_views=len(image_files))
                         update_inter = intermediate_matrices[img_index]
 
                         if img_index < 30:
@@ -797,9 +1028,11 @@ class Neural3D_NDC_Dataset(Dataset):
 
 
 
+
+
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle, #
-                            'extrinsic_matrix': extrinsic_south_2, #update_inter, # update_extrinsics, # #novel_poses[img_index], # #
+                            'extrinsic_matrix': extrinsic_south_2, # novel_views[img_index], #novel_views[img_index], #new_extrinsic_up, #update_inter, #extrinsic_south_2, #, # update_extrinsics, # #novel_poses[img_index], # #extrinsic_south_2, #
                             "projection_matrix": south_2_proj
                         }
                         N_time = len(image_files)
@@ -854,6 +1087,9 @@ class Neural3D_NDC_Dataset(Dataset):
                         intrinsic_vehicle = np.asarray([[2726.55, 0.0, 685.235],
                                                         [0.0, 2676.64, 262.745],
                                                         [0.0, 0.0, 1.0]], dtype=np.float32)
+                        intrinsic_south_2 = np.asarray([[1315.158203125, 0.0, 962.7348338975571],
+                                                        [0.0, 1362.7757568359375, 580.6482296623581],
+                                                        [0.0, 0.0, 1.0]], dtype=np.float32)
                         vehicle_cam_to_lidar = np.asarray([[0.12672871, 0.12377692, 0.9841849, 0.14573078],  # TBD
                                                            [-0.9912245, -0.02180046, 0.13037732, 0.19717109],
                                                            [0.03759337, -0.99207014, 0.11992808, -0.02214238],
@@ -878,14 +1114,64 @@ class Neural3D_NDC_Dataset(Dataset):
                                     matrix = transform_data.get("transform_src_to_dst", {}).get("matrix4x4")
 
                         vehicle_to_infra_transformation_matrix = np.array(matrix)
+
                         extrinsic_matrix_vehicle = np.matmul(np.linalg.inv(vehicle_cam_to_lidar),
                                                              np.linalg.inv(vehicle_to_infra_transformation_matrix))
+
+                        #import numpy as np
+
+                        # Shared intrinsic matrix
+                        intrinsic_south_2 = np.array([
+                            [1315.158203125, 0.0, 962.7348338975571],
+                            [0.0, 1362.7757568359375, 580.6482296623581],
+                            [0.0, 0.0, 1.0]
+                        ], dtype=np.float32)
+
+                        # Third camera's intrinsic matrix
+                        intrinsic_vehicle = np.array([
+                            [2726.55, 0.0, 685.235],
+                            [0.0, 2676.64, 262.745],
+                            [0.0, 0.0, 1.0]
+                        ], dtype=np.float32)
+
+                        # Compute T_intrinsic
+                        T_intrinsic = np.dot(intrinsic_south_2, np.linalg.inv(intrinsic_vehicle))
+
+                        # Assuming extrinsic_matrix_vehicle is a 4x4 matrix
+                        # extrinsic_matrix_vehicle = np.matmul(np.linalg.inv(vehicle_cam_to_lidar), np.linalg.inv(vehicle_to_infra_transformation_matrix))
+
+                        # Extract rotation (R) and translation (t)
+                        R_vehicle = extrinsic_matrix_vehicle[:3, :3]  # 3x3 rotation
+                        t_vehicle = extrinsic_matrix_vehicle[:3, 3:]  # 3x1 translation
+
+                        # Adjust the rotation using T_intrinsic
+                        R_vehicle_adjusted = np.dot(T_intrinsic, R_vehicle)
+
+                        # Combine adjusted rotation and original translation to form a 3x4 matrix
+                        extrinsic_matrix_vehicle_adjusted = np.hstack((R_vehicle_adjusted, t_vehicle))
+
+                        # Convert to 4x4 homogeneous matrix
+                        extrinsic_matrix_vehicle_adjusted_homogeneous = np.vstack(
+                            (extrinsic_matrix_vehicle_adjusted, [0, 0, 0, 1]))
+
+                        infra_to_vehicle = np.linalg.inv(extrinsic_matrix_vehicle)
+                        transformation_matrix_s110_lidar_ouster_south_to_s110_base = np.array([
+                            [0.21479485, -0.9761028, 0.03296187, -15.87257873],
+                            [0.97627128, 0.21553835, 0.02091894, 2.30019086],
+                            [-0.02752358, 0.02768645, 0.99923767, 7.48077521],
+                            [0.00000000, 0.00000000, 0.00000000, 1.00000000]
+                        ])
+                        shata = np.matmul(transformation_matrix_s110_lidar_ouster_south_to_s110_base, infra_to_vehicle)
                         vehicle_proj = np.matmul(np.hstack((intrinsic_vehicle, np.zeros((3, 1), dtype=np.float32))), extrinsic_matrix_vehicle)
                         #Vehicle transformation needs to be transposed inorder to maintaion consistentcy
                         # Use extrinsic_v  for training
                         extrinsic_v = np.eye(4).astype(np.float32)
                         extrinsic_v[:3, :3] = extrinsic_matrix_vehicle[:3, :3].transpose()
                         extrinsic_v[:3, 3] = extrinsic_matrix_vehicle[:3, 3]
+
+                        #extrinsic_v = np.eye(4).astype(np.float32)
+                        #extrinsic_v[:3, :3] = shata[:3, :3].transpose()
+                        #extrinsic_v[:3, 3] = shata[:3, 3]
 
                         if img_index==0:
                             save_first_pose = extrinsic_v
@@ -1009,7 +1295,7 @@ class Neural3D_NDC_Dataset(Dataset):
                             intrinsic_matrix_for_rendering = intrinsic_south_2
                         
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle,# #intrinsic_south_2, #
+                            'intrinsic_matrix': intrinsic_vehicle, #intrinsic_south_2, #intrinsic_vehicle, ##intrinsic_matrix_for_rendering, ## #intrinsic_south_2, # #intrinsic_vehicle, #
                             'extrinsic_matrix': extrinsic_v, #update_inter_veh, #extrinsic_v, #update_extrinsics_ve, #  , novel_poses_vehicle[img_index], # #
                             "projection_matrix": vehicle_proj
                         }
@@ -1022,7 +1308,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         this_count += 1
 
-                if dir == "cam08":  # South 1
+                if dir == "cam03":  # South 1
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1042,6 +1328,9 @@ class Neural3D_NDC_Dataset(Dataset):
 
                         intrinsic_south_1 = np.asarray([[1400.3096617691212, 0.0, 967.7899705163408],
                                                         [0.0, 1403.041082755918, 581.7195041357244],
+                                                        [0.0, 0.0, 1.0]], dtype=np.float32)
+                        intrinsic_south_2 = np.asarray([[1315.158203125, 0.0, 962.7348338975571],
+                                                        [0.0, 1362.7757568359375, 580.6482296623581],
                                                         [0.0, 0.0, 1.0]], dtype=np.float32)
                         """
                         Using extrinsics matrix from TUMTRAF Repo
@@ -1072,6 +1361,7 @@ class Neural3D_NDC_Dataset(Dataset):
                             transformation_matrix_base_to_camera_south_1,
                             transformation_matrix_lidar_to_base_south_1)
                         camera_to_lidar_extrinsics_south_1 = np.linalg.inv(extrinsic_matrix_lidar_to_camera_south_1)
+                        new_extrinsic_up = shift_view(camera_to_lidar_extrinsics_south_1, angle_deg=img_index, axis='z')
 
 
                         south_1_proj = np.asarray(
@@ -1079,9 +1369,11 @@ class Neural3D_NDC_Dataset(Dataset):
                              [-57.00793327192514, -67.92432779187584, -1461.785310749125, -806.9258947569469],
                              [0.7901272773742676, 0.3428181111812592, -0.508108913898468, 3.678680419921875]],
                             dtype=np.float32)
+                        #novel_views = generate_novel_views_slerp(camera_to_lidar_extrinsics_south_1, extrinsic_south_2,
+                         #                                        num_views=len(image_files))
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_south_1,
-                            'extrinsic_matrix': camera_to_lidar_extrinsics_south_1,
+                            'intrinsic_matrix': intrinsic_south_2,
+                            'extrinsic_matrix': camera_to_lidar_extrinsics_south_1, #novel_views[img_index], #new_extrinsic_up, #camera_to_lidar_extrinsics_south_1, #extrinsic_south_1, #c
                             "projection_matrix": south_1_proj
                         }
                         N_time = len(image_files)
@@ -1115,6 +1407,9 @@ class Neural3D_NDC_Dataset(Dataset):
                         intrinsic_south_1 = np.asarray([[1400.3096617691212, 0.0, 967.7899705163408],
                                                         [0.0, 1403.041082755918, 581.7195041357244],
                                                         [0.0, 0.0, 1.0]], dtype=np.float32)
+                        northintrinsics = np.asarray([[1315.158203125, 0.0, 962.7348338975571],
+                                                      [0.0, 1362.7757568359375, 580.6482296623581],
+                                                      [0.0, 0.0, 1.0]], dtype=np.float32)
                         """
                         Using extrinsics matrix from TUMTRAF Repo
                         """
@@ -1174,10 +1469,42 @@ class Neural3D_NDC_Dataset(Dataset):
                              [-57.00793327192514, -67.92432779187584, -1461.785310749125, -806.9258947569469],
                              [0.7901272773742676, 0.3428181111812592, -0.508108913898468, 3.678680419921875]],
                             dtype=np.float32)
+                        infralidar2n1image = np.asarray(
+                            [[-185.2891049687059, -1504.063395597006, -525.9215327879701, -23336.12843138125],
+                             [-240.2665682659353, 220.6722195428702, -1567.287260600104, 6362.243306159624],
+                             [0.6863989233970642, -0.4493367969989777, -0.5717979669570923, -6.750176429748535]],
+                            dtype=np.float32)
+
+                        # Given projection matrix
+                        infralidar2n1image = np.array([
+                            [-185.2891049687059, -1504.063395597006, -525.9215327879701, -23336.12843138125],
+                            [-240.2665682659353, 220.6722195428702, -1567.287260600104, 6362.243306159624],
+                            [0.6863989233970642, -0.4493367969989777, -0.5717979669570923, -6.750176429748535]
+                        ], dtype=np.float32)
+
+                        # Given intrinsic matrix
+                        northintrinsics = np.array([
+                            [1315.158203125, 0.0, 962.7348338975571],
+                            [0.0, 1362.7757568359375, 580.6482296623581],
+                            [0.0, 0.0, 1.0]
+                        ], dtype=np.float32)
+
+                        # Compute the inverse of the intrinsic matrix
+                        K_inv = np.linalg.inv(northintrinsics)
+
+                        # Extract the extrinsic matrix [R | t] by multiplying K^-1 with the projection matrix
+                        extrinsic_matrix_north = K_inv @ infralidar2n1image
+                        extrinsic_matrix_4x4_north = np.vstack((extrinsic_matrix_north, [0, 0, 0, 1]))
+                        print(extrinsic_matrix_4x4_north)
+
+                        # Extract the rotation matrix R and the translation vector t
+                        R = extrinsic_matrix[:, :3]
+                        t = extrinsic_matrix[:, 3]
+
                         image_pose_dict = {
-                            'intrinsic_matrix': intrinsic_south_1,
-                            'extrinsic_matrix': north2infralidar,
-                            "projection_matrix": south_1_proj
+                            'intrinsic_matrix': northintrinsics,
+                            'extrinsic_matrix': shata, #north2infralidar, #camera_to_lidar_extrinsics_north_1, #
+                            "projection_matrix": infralidar2n1image
                         }
                         N_time = len(image_files)
                         image_paths.append(os.path.join(images_path))
@@ -1190,7 +1517,7 @@ class Neural3D_NDC_Dataset(Dataset):
                         this_count += 1
 
                 #image_poses = reorder_extrinsic_matrices(image_poses)
-        return image_paths, image_poses,  image_times, N_cams, N_time, depth_paths #Use this for training gaussian spalatting on TUMTRAF image_poses,
+        return image_paths, image_poses,  image_times, depth_paths #Use this for training gaussian spalatting on TUMTRAF image_poses,
     def __len__(self):
         return len(self.image_paths)
     def __getitem__(self,index):
@@ -1207,7 +1534,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
         img = self.transform(img)
 
-        return img, self.image_poses[index], self.image_times[index], depth
+        return img, self.image_poses[index], self.image_times[index] #, depth
     def load_pose(self,index):
         pose = self.image_poses[index] #
         extrinsic_matrix = pose['extrinsic_matrix']

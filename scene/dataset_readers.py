@@ -126,8 +126,8 @@ def fetchPly(path):
     vertices = plydata['vertex']
     #print(vertices)
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
-    #colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
-    colors = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T #/ 255.0
+    colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
+    #colors = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T #/ 255.0
     normals = np.zeros((len(positions), 3))
     #normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
     return BasicPointCloud(points=positions, colors=colors, normals=normals)
@@ -456,8 +456,13 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     """
     Use pretrained gaussian point clouds for init
     """
-    ply_path = "/home/uchihadj/ECCV_workshop/splatviz/_ply_files/first_trained_iter.ply"
-
+    #ply_path = "/home/uchihadj/ECCV_workshop/splatviz/_ply_files/first_trained_iter.ply"
+    #ply_path = "/home/uchihadj/ECCV_workshop/sumne_/data/s3_based_benchmarking/SCENE_yellow_car/Yellow_with_collab_50_frames/USE_THIS_FOR_LIDAR_COMBINED/filtered_pc_both_infra_coloured_combined_point_cloud.ply"
+    #ply_path = "/home/uchihadj/Uchiha_MODE_Oct/Scene_pedestrians/Scene_234/lidar_init/Scene234_Alligned_lidar_withpose.ply"
+    """
+    Bicycle Occlusion
+    """
+    ply_path = "/home/uchihadj/Failure_mode/Collaborative-dynmaic-gaussian-spaltting/data/Bicycle_occlusion/lidar_init/downsampled_0.5_filtered_pc_both_infra_coloured_combined_point_cloud.ply"
 
     """
     Downasmpled points indha accuracy kami agtha idjhiya so i use raw points
@@ -484,24 +489,25 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     eval_index=0,
         )
     train_cam_infos = format_infos(train_dataset,"train")
-    val_cam_infos = format_render_poses(test_dataset.val_poses,test_dataset)
+    #val_cam_infos = format_render_poses(test_dataset.val_poses,test_dataset)
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
     # xyz = np.load
     pcd = fetchPly(ply_path)
     print("origin points,",pcd.points.shape[0])
-    
+
     print("after points,",pcd.points.shape[0])
 
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_dataset,
                            test_cameras=test_dataset,
-                           video_cameras=val_cam_infos,
+                           video_cameras=train_dataset,
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path,
-                           maxtime=300
+                           maxtime=1
                            )
     return scene_info
+
 
 def setup_camera(w, h, k, w2c, near=0.01, far=100):
     from diff_gaussian_rasterization import GaussianRasterizationSettings as Camera
