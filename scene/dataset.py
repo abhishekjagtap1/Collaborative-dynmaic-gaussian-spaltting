@@ -25,6 +25,7 @@ class FourDGSdataset(Dataset):
                 image, w2c, time = self.dataset[index]
                 #store = self.dataset[index]
                 extrinsic_matrix = w2c['extrinsic_matrix']
+                cam_id = w2c['cam_id']
                 R = extrinsic_matrix[:3, :3]  # .transpose()
                 T = extrinsic_matrix[:3, 3]
                 #R,T = w2c
@@ -50,10 +51,11 @@ class FourDGSdataset(Dataset):
     
                 mask = caminfo.mask
                 F = np.eye(4)#
+                cam_id = w2c['cam_id']
                 #F=np.eye(4)
                 #F [:3, :3] =
-             return Camera(colmap_id=index,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
-                              image_name=f"{index}",uid=index,data_device=torch.device("cuda"),time=time,
+             return Camera(colmap_id=cam_id,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
+                              image_name=f"{index}",uid=cam_id,data_device=torch.device("cuda"),time=time,
                               mask=mask, F=F, depth=depth)
 
         else:

@@ -855,7 +855,7 @@ class Neural3D_NDC_Dataset(Dataset):
 
         for root, dirs, files in os.walk(datadir):
             for dir in dirs:
-                if dir == "cam08":  # South 2
+                if dir == "cam01":  # South 2
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
@@ -1033,7 +1033,8 @@ class Neural3D_NDC_Dataset(Dataset):
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2, #intrinsic_matrix_for_rendering, #intrinsic_vehicle, #
                             'extrinsic_matrix': extrinsic_south_2, # novel_views[img_index], #novel_views[img_index], #new_extrinsic_up, #update_inter, #extrinsic_south_2, #, # update_extrinsics, # #novel_poses[img_index], # #extrinsic_south_2, #
-                            "projection_matrix": south_2_proj
+                            "projection_matrix": south_2_proj,
+                            "cam_id":1
                         }
                         N_time = len(image_files)
                         image_paths.append(os.path.join(images_path))
@@ -1297,7 +1298,8 @@ class Neural3D_NDC_Dataset(Dataset):
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_vehicle, #intrinsic_south_2, #intrinsic_vehicle, ##intrinsic_matrix_for_rendering, ## #intrinsic_south_2, # #intrinsic_vehicle, #
                             'extrinsic_matrix': extrinsic_v, #update_inter_veh, #extrinsic_v, #update_extrinsics_ve, #  , novel_poses_vehicle[img_index], # #
-                            "projection_matrix": vehicle_proj
+                            "projection_matrix": vehicle_proj,
+                            "cam_id":2
                         }
                         N_time = len(image_files)
                         image_paths.append(os.path.join(images_path))
@@ -1374,7 +1376,8 @@ class Neural3D_NDC_Dataset(Dataset):
                         image_pose_dict = {
                             'intrinsic_matrix': intrinsic_south_2,
                             'extrinsic_matrix': camera_to_lidar_extrinsics_south_1, #novel_views[img_index], #new_extrinsic_up, #camera_to_lidar_extrinsics_south_1, #extrinsic_south_1, #c
-                            "projection_matrix": south_1_proj
+                            "projection_matrix": south_1_proj,
+                            "cam_id": 3
                         }
                         N_time = len(image_files)
                         image_paths.append(os.path.join(images_path))

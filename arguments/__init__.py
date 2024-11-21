@@ -110,7 +110,7 @@ class OptimizationParams(ParamGroup):
     def __init__(self, parser):
         self.dataloader=False
         self.zerostamp_init=False
-        self.custom_sampler=None
+        self.custom_sampler=False
         self.iterations = 30_000
         self.coarse_iterations = 3000
         self.position_lr_init = 0.00016

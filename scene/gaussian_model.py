@@ -594,12 +594,77 @@ class GaussianModel:
         self.prune_points(prune_mask)
 
         torch.cuda.empty_cache()
-    def densify(self, max_grad, min_opacity, extent, max_screen_size, density_threshold, displacement_scale, model_path=None, iteration=None, stage=None):
+    def densify(self, max_grad, min_opacity, extent, max_screen_size, density_threshold, displacement_scale, model_path=None, iteration=None, stage=None, cams=None, boxes=None):
         grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0.0
 
+        box3ds = []
+        if cams is not None:
+            for i, cam_0 in enumerate(cams):
+                for j, cam_1 in enumerate(cams[i + 1:]):
+                    ray0_o = cam_0.rayo
+                    ray0_d = cam_0.rayd
+                    box0 = boxes[i]
+
+                    ray0_o_topleft = ray0_o[0, :, box0[0], box0[1]]
+                    ray0_d_topleft = ray0_d[0, :, box0[0], box0[1]]
+
+                    ray0_o_bottomright = ray0_o[0, :, box0[2], box0[3]]
+                    ray0_d_bottomright = ray0_d[0, :, box0[2], box0[3]]
+
+                    ray0_o_bottomleft = ray0_o[0, :, box0[2], box0[1]]
+                    ray0_d_bottomleft = ray0_d[0, :, box0[2], box0[1]]
+
+                    ray0_o_topright = ray0_o[0, :, box0[0], box0[3]]
+                    ray0_d_topright = ray0_d[0, :, box0[0], box0[3]]
+
+                    ray1_o = cam_1.rayo
+                    ray1_d = cam_1.rayd
+                    box1 = boxes[j + i + 1]
+
+                    ray1_o_topleft = ray1_o[0, :, box1[0], box1[1]]
+                    ray1_d_topleft = ray1_d[0, :, box1[0], box1[1]]
+
+                    ray1_o_bottomright = ray1_o[0, :, box1[2], box1[3]]
+                    ray1_d_bottomright = ray1_d[0, :, box1[2], box1[3]]
+
+                    ray1_o_bottomleft = ray1_o[0, :, box1[2], box1[1]]
+                    ray1_d_bottomleft = ray1_d[0, :, box1[2], box1[1]]
+
+                    ray1_o_topright = ray1_o[0, :, box1[0], box1[3]]
+                    ray1_d_topright = ray1_d[0, :, box1[0], box1[3]]
+
+                    topleft_intersect = self.intersect_lines(ray0_o_topleft, ray0_d_topleft, ray1_o_topleft,
+                                                             ray1_d_topleft)
+                    bottomright_intersect = self.intersect_lines(ray0_o_bottomright, ray0_d_bottomright,
+                                                                 ray1_o_bottomright, ray1_d_bottomright)
+                    bottomleft_interset = self.intersect_lines(ray0_o_bottomleft, ray0_d_bottomleft, ray1_o_bottomleft,
+                                                               ray1_d_bottomleft)
+                    topright_intersect = self.intersect_lines(ray0_o_topright, ray0_d_topright, ray1_o_topright,
+                                                              ray1_d_topright)
+
+                    region3d = [topleft_intersect, bottomright_intersect, bottomleft_interset, topright_intersect]
+                    if len(region3d) == 0 or None in region3d:
+                        continue
+                    region3d = torch.vstack(region3d)
+                    x_min_3d = torch.min(region3d[:, 0])
+                    y_min_3d = torch.min(region3d[:, 1])
+                    z_min_3d = torch.min(region3d[:, 2])
+
+                    x_max_3d = torch.max(region3d[:, 0])
+                    y_max_3d = torch.max(region3d[:, 1])
+                    z_max_3d = torch.max(region3d[:, 2])
+
+                    box3d = [x_min_3d, y_min_3d, z_min_3d, x_max_3d, y_max_3d, z_max_3d]
+                    box3ds.append(box3d)
+
+        self.densify_and_clone(grads, max_grad, extent, box3ds)
+
         self.densify_and_clone(grads, max_grad, extent, density_threshold, displacement_scale, model_path, iteration, stage)
         self.densify_and_split(grads, max_grad, extent)
+
+
+
     def standard_constaint(self):
         
         means3D = self._xyz.detach()
