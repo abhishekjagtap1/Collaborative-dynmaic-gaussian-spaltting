@@ -392,6 +392,37 @@ class GaussianModel:
 
         return optimizable_tensors
 
+
+
+    def intersect_lines(self, ray1_origin, ray1_dir, ray2_origin, ray2_dir):
+        # Normalize direction vectors
+        ray1_dir = ray1_dir / torch.norm(ray1_dir)
+        ray2_dir = ray2_dir / torch.norm(ray2_dir)
+
+        # Cross product of direction vectors
+        cross_dir = torch.cross(ray1_dir, ray2_dir)
+        cross_dir_norm = torch.norm(cross_dir)
+
+        # Check if the rays are parallel
+        if cross_dir_norm < 1e-6:
+            return None  # Rays are parallel and do not intersect
+
+        # Line between the origins
+        origin_diff = ray2_origin - ray1_origin
+
+        # Calculate the distance along the cross product direction
+        t1 = torch.dot(torch.cross(origin_diff, ray2_dir), cross_dir) / (cross_dir_norm ** 2)
+        t2 = torch.dot(torch.cross(origin_diff, ray1_dir), cross_dir) / (cross_dir_norm ** 2)
+
+        # Closest points on each ray
+        closest_point1 = ray1_origin + t1 * ray1_dir
+        closest_point2 = ray2_origin + t2 * ray2_dir
+
+        # Midpoint between the two closest points as the intersection point
+        intersection_point = (closest_point1 + closest_point2) / 2.0
+
+        return intersection_point
+
     def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table):
         d = {"xyz": new_xyz,
         "f_dc": new_features_dc,
@@ -445,7 +476,21 @@ class GaussianModel:
         prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
         self.prune_points(prune_filter)
 
-    def densify_and_clone(self, grads, grad_threshold, scene_extent, density_threshold=20, displacement_scale=20, model_path=None, iteration=None, stage=None):
+    def densify_and_clone(self, grads, grad_threshold, scene_extent, box3ds, density_threshold=20, displacement_scale=20, model_path=None, iteration=None, stage=None):
+
+        # Extract points that satisfy the gradient condition
+        mask = torch.zeros_like(self.get_xyz[:,0])
+        for box3d in box3ds:
+            x_min_3d, y_min_3d, z_min_3d, x_max_3d, y_max_3d, z_max_3d = box3d
+            mask_x = torch.logical_and(self.get_xyz[:, 0] > x_min_3d, self.get_xyz[:, 0] < x_max_3d)
+            mask_y = torch.logical_and(self.get_xyz[:, 1] > y_min_3d, self.get_xyz[:, 1] < y_max_3d)
+            mask_z = torch.logical_and(self.get_xyz[:, 2] > z_min_3d, self.get_xyz[:, 2] < z_max_3d)
+            mask_xyz = torch.logical_and(mask_x, mask_y)
+            mask_xyz = torch.logical_and(mask_xyz, mask_z)
+
+            mask = torch.logical_or(mask, mask_xyz)
+
+
         grads_accum_mask = torch.where(torch.norm(grads, dim=-1) >= grad_threshold, True, False)
         
         # 主动增加稀疏点云
@@ -471,6 +516,7 @@ class GaussianModel:
         # Extract points that satisfy the gradient condition
         selected_pts_mask = torch.logical_and(grads_accum_mask,
                                               torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
+        selected_pts_mask = torch.logical_or(selected_pts_mask, mask)
         # breakpoint()        
         new_xyz = self._xyz[selected_pts_mask] 
         # - 0.001 * self._xyz.grad[selected_pts_mask]
@@ -593,6 +639,37 @@ class GaussianModel:
             prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
         self.prune_points(prune_mask)
 
+
+        def intersect_lines(self, ray1_origin, ray1_dir, ray2_origin, ray2_dir):
+            # Normalize direction vectors
+            ray1_dir = ray1_dir / torch.norm(ray1_dir)
+            ray2_dir = ray2_dir / torch.norm(ray2_dir)
+
+            # Cross product of direction vectors
+            cross_dir = torch.cross(ray1_dir, ray2_dir)
+            cross_dir_norm = torch.norm(cross_dir)
+
+            # Check if the rays are parallel
+            if cross_dir_norm < 1e-6:
+                return None  # Rays are parallel and do not intersect
+
+            # Line between the origins
+            origin_diff = ray2_origin - ray1_origin
+
+
+            # Calculate the distance along the cross product direction
+            t1 = torch.dot(torch.cross(origin_diff, ray2_dir), cross_dir) / (cross_dir_norm ** 2)
+            t2 = torch.dot(torch.cross(origin_diff, ray1_dir), cross_dir) / (cross_dir_norm ** 2)
+
+            # Closest points on each ray
+            closest_point1 = ray1_origin + t1 * ray1_dir
+            closest_point2 = ray2_origin + t2 * ray2_dir
+
+            # Midpoint between the two closest points as the intersection point
+            intersection_point = (closest_point1 + closest_point2) / 2.0
+
+            return intersection_point
+
         torch.cuda.empty_cache()
     def densify(self, max_grad, min_opacity, extent, max_screen_size, density_threshold, displacement_scale, model_path=None, iteration=None, stage=None, cams=None, boxes=None):
         grads = self.xyz_gradient_accum / self.denom
@@ -634,6 +711,8 @@ class GaussianModel:
                     ray1_o_topright = ray1_o[0, :, box1[0], box1[3]]
                     ray1_d_topright = ray1_d[0, :, box1[0], box1[3]]
 
+
+
                     topleft_intersect = self.intersect_lines(ray0_o_topleft, ray0_d_topleft, ray1_o_topleft,
                                                              ray1_d_topleft)
                     bottomright_intersect = self.intersect_lines(ray0_o_bottomright, ray0_d_bottomright,
@@ -658,9 +737,9 @@ class GaussianModel:
                     box3d = [x_min_3d, y_min_3d, z_min_3d, x_max_3d, y_max_3d, z_max_3d]
                     box3ds.append(box3d)
 
-        self.densify_and_clone(grads, max_grad, extent, box3ds)
+        #self.densify_and_clone(grads, max_grad, extent, box3ds)
 
-        self.densify_and_clone(grads, max_grad, extent, density_threshold, displacement_scale, model_path, iteration, stage)
+        self.densify_and_clone(grads, max_grad, extent, box3ds, density_threshold, displacement_scale, model_path, iteration, stage)
         self.densify_and_split(grads, max_grad, extent)
 
 
