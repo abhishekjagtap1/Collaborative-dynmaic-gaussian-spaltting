@@ -391,7 +391,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                             opt.densify_grad_threshold_fine_init - opt.densify_grad_threshold_after) / (
                                             opt.densify_until_iter)
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 and \
-                        gaussians.get_xyz.shape[0] < 360000:
+                        gaussians.get_xyz.shape[0] < 2000000:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
 
                     """
@@ -407,9 +407,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                                 diffs.append(diff)
                     diffs = torch.stack(diffs)
                     if torch.any(diffs > 1):
-                        densify_t = opt.densify_grad_threshold_after * 0.5
+                        densify_t = densify_threshold * 0.5
                     else:
-                        densify_t = opt.densify_grad_threshold_after
+                        densify_t = densify_threshold
 
                     boxes = []
                     losses = []

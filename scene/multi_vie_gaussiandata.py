@@ -869,12 +869,9 @@ class Neural3D_NDC_Dataset(Dataset):
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
-                    flow_folder = os.path.join(root, "cam01_flow_forward")
-                    flow_files = sorted(os.listdir(flow_folder))
                     this_count = 0
 
-                    #for img_file in image_files:
-                    for img_file, flow_file in zip(image_files, flow_files):
+                    for img_file in image_files:
                         if this_count >= countss: break
                         img_index = image_files.index(img_file)
                         images_path = os.path.join(image_folders, img_file)
@@ -890,6 +887,9 @@ class Neural3D_NDC_Dataset(Dataset):
                         Add flow supervision fround truth
                         """
                         if self.flow_data:
+                            flow_folder = os.path.join(root, "cam01_flow_forward")
+                            flow_files_cam01 = sorted(os.listdir(flow_folder))
+
                             flow_path = os.path.join(flow_folder, flow_file)
 
                         intrinsic_south_2 = np.asarray([[1315.158203125, 0.0, 962.7348338975571],
@@ -1047,12 +1047,9 @@ class Neural3D_NDC_Dataset(Dataset):
                     image_files = sorted(os.listdir(image_folders))
                     metadata_folders = os.path.join(root, "vehicle_meta_data")
                     meta_files = sorted(os.listdir(metadata_folders))
-                    flow_folder = os.path.join(root, "cam02_flow_forward")
-                    flow_files = sorted(os.listdir(flow_folder))
-
                     this_count = 0
 
-                    for img_file, meta_file, flow_file in zip(image_files, meta_files, flow_files):
+                    for img_file, meta_file in zip(image_files, meta_files):
                         images_path = os.path.join(image_folders, img_file)
                         img_index = image_files.index(img_file)
                         metadata_path = os.path.join(metadata_folders, meta_file)
@@ -1075,7 +1072,11 @@ class Neural3D_NDC_Dataset(Dataset):
                                 depth_path = os.path.join(depth_folder, depth_file)
 
                         if self.flow_data:
-                            flow_path = os.path.join(flow_folder, flow_file)
+                            flow_folder = os.path.join(root, "cam02_flow_forward")
+                            flow_files = sorted(os.listdir(flow_folder))
+                            assert len(flow_files) == len(image_files)
+                            for flow_file in flow_files:
+                                flow_path = os.path.join(flow_folder, flow_file)
 
                         import json
                         with open(metadata_path, 'r') as file:
@@ -1292,11 +1293,9 @@ class Neural3D_NDC_Dataset(Dataset):
                     N_cams += 1
                     image_folders = os.path.join(root, dir)
                     image_files = sorted(os.listdir(image_folders))
-                    flow_folder = os.path.join(root, "cam03_flow_forward")
-                    flow_files = sorted(os.listdir(flow_folder))
                     this_count = 0
                     # image_files = image_files[:20] #hardcode to take only first 20 samples
-                    for img_file, flow_file in zip(image_files, flow_files):
+                    for img_file in image_files:
                         if this_count >= countss: break
                         img_index = image_files.index(img_file)
                         images_path = os.path.join(image_folders, img_file)
@@ -1309,7 +1308,11 @@ class Neural3D_NDC_Dataset(Dataset):
                                 depth_path = os.path.join(depth_folder, depth_file)
 
                         if self.flow_data:
-                            flow_path = os.path.join(flow_folder, flow_file)
+                            flow_folder = os.path.join(root, "cam03_flow_forward")
+                            flow_files = sorted(os.listdir(flow_folder))
+                            assert len(flow_files) == len(image_files)
+                            for flow_file in flow_files:
+                                flow_path = os.path.join(flow_folder, flow_file)
 
                         intrinsic_south_1 = np.asarray([[1400.3096617691212, 0.0, 967.7899705163408],
                                                         [0.0, 1403.041082755918, 581.7195041357244],
@@ -1379,7 +1382,7 @@ class Neural3D_NDC_Dataset(Dataset):
                     image_files = sorted(os.listdir(image_folders))
                     this_count = 0
                     # image_files = image_files[:20] #hardcode to take only first 20 samples
-                    for img_file, flow_file in zip(image_files, flow_files):
+                    for img_file in image_files:
                         if this_count >= countss: break
                         img_index = image_files.index(img_file)
                         images_path = os.path.join(image_folders, img_file)
@@ -1532,11 +1535,12 @@ class Neural3D_NDC_Dataset(Dataset):
             # flow_data =  Image.open(self.flow_paths[index])
             # flow_data = flow_data.resize(self.img_wh, Image.LANCZOS)
             flow = self.transform(flow_tensor)  ##Harself.transform(depth_image).float()dcoded for the moemmt now
-
+            optical_flow_mask = torch.tensor(flow, dtype=torch.float32)
+            optical_flow_mask /= torch.max(torch.abs(optical_flow_mask))
 
         img = self.transform(img)
 
-        return img, self.image_poses[index], self.image_times[index], flow  # , depth
+        return img, self.image_poses[index], self.image_times[index], optical_flow_mask  # , depth
 
     def load_pose(self, index):
         pose = self.image_poses[index]  #

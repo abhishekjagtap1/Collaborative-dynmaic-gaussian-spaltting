@@ -640,35 +640,6 @@ class GaussianModel:
         self.prune_points(prune_mask)
 
 
-        def intersect_lines(self, ray1_origin, ray1_dir, ray2_origin, ray2_dir):
-            # Normalize direction vectors
-            ray1_dir = ray1_dir / torch.norm(ray1_dir)
-            ray2_dir = ray2_dir / torch.norm(ray2_dir)
-
-            # Cross product of direction vectors
-            cross_dir = torch.cross(ray1_dir, ray2_dir)
-            cross_dir_norm = torch.norm(cross_dir)
-
-            # Check if the rays are parallel
-            if cross_dir_norm < 1e-6:
-                return None  # Rays are parallel and do not intersect
-
-            # Line between the origins
-            origin_diff = ray2_origin - ray1_origin
-
-
-            # Calculate the distance along the cross product direction
-            t1 = torch.dot(torch.cross(origin_diff, ray2_dir), cross_dir) / (cross_dir_norm ** 2)
-            t2 = torch.dot(torch.cross(origin_diff, ray1_dir), cross_dir) / (cross_dir_norm ** 2)
-
-            # Closest points on each ray
-            closest_point1 = ray1_origin + t1 * ray1_dir
-            closest_point2 = ray2_origin + t2 * ray2_dir
-
-            # Midpoint between the two closest points as the intersection point
-            intersection_point = (closest_point1 + closest_point2) / 2.0
-
-            return intersection_point
 
         torch.cuda.empty_cache()
     def densify(self, max_grad, min_opacity, extent, max_screen_size, density_threshold, displacement_scale, model_path=None, iteration=None, stage=None, cams=None, boxes=None):
@@ -755,6 +726,7 @@ class GaussianModel:
         position_error = (means3D_deform - means3D)**2
         rotation_error = (rotations_deform - rotations)**2 
         scaling_erorr = (scales_deform - scales)**2
+
         return position_error.mean() + rotation_error.mean() + scaling_erorr.mean()
 
 
