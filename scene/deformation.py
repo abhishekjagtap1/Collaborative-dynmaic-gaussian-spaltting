@@ -12,6 +12,8 @@ import torch.nn.init as init
 from utils.graphics_utils import apply_rotation, batch_quaternion_multiply
 from scene.hexplane import HexPlaneField
 from scene.grid import DenseGrid
+from scene.deformation_attention import AttentionFeatureOut, SelfAttentionLayer
+
 # from scene.grid import HashHexPlane
 class Deformation(nn.Module):
     def __init__(self, D=8, W=256, input_ch=27, input_ch_time=9, grid_pe=0, skips=[], args=None):
@@ -53,11 +55,17 @@ class Deformation(nn.Module):
             self.feature_out = [nn.Linear(4,self.W)]
         else:
             self.feature_out = [nn.Linear(mlp_out_dim + grid_out_dim ,self.W)]
-        
-        for i in range(self.D-1):
+        """
+        if self.no_grid:
+            self.feature_out = SelfAttentionLayer(embed_dim=self.W, num_heads=8, dropout=0.1)
+        else:
+            self.feature_out = SelfAttentionLayer(embed_dim=self.W, num_heads=8, dropout=0.1)
+        """
+        for i in range(self.D - 1):
             self.feature_out.append(nn.ReLU())
-            self.feature_out.append(nn.Linear(self.W,self.W))
+            self.feature_out.append(nn.Linear(self.W, self.W))
         self.feature_out = nn.Sequential(*self.feature_out)
+
         self.pos_deform = nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 3))
         self.scales_deform = nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 3))
         self.rotations_deform = nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 4))
@@ -74,10 +82,10 @@ class Deformation(nn.Module):
             # breakpoint()
             if self.grid_pe > 1:
                 grid_feature = poc_fre(grid_feature,self.grid_pe)
-            hidden = torch.cat([grid_feature],-1) 
-        
-        
-        hidden = self.feature_out(hidden)   
+            hidden = torch.cat([grid_feature],-1)
+
+        #hidden = hidden.unsqueeze(0)
+        hidden = self.feature_out(hidden)
  
 
         return hidden

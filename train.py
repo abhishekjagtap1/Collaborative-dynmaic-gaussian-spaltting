@@ -169,7 +169,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             viewpoint_cams = []
             multi_agent_cams = []
             camera_t = []
-
+            #only if 6 iteration code
+            #multi_agent_cams *= 3
+            #camera_t *=  3
+            multi_agent_cams = multi_agent_cams * 3
+            # Result: [camera1, camera2, camera1, camera2, camera1, camera2]
 
             while idx < batch_size :
 
@@ -190,11 +194,15 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                         (camera for camera in vehicle_camera_cam if camera.time == get_timestamp),
                         None  # Default value if no match is found
                     )
-                    multi_agent_cams.append(matching_camera_timestamp_south_2)
-                    multi_agent_cams.append(matching_camera_timestamp_vehicle)
-                    camera_t.append(matching_camera_timestamp_south_2.camera_center / torch.norm(matching_camera_timestamp_south_2.camera_center))
-                    camera_t.append(matching_camera_timestamp_vehicle.camera_center / torch.norm(
-                        matching_camera_timestamp_vehicle.camera_center))
+                    for _ in range(3):  # Repeat 3 times
+                        multi_agent_cams.append(matching_camera_timestamp_south_2)
+                        multi_agent_cams.append(matching_camera_timestamp_vehicle)
+                        camera_t.append(matching_camera_timestamp_south_2.camera_center / torch.norm(
+                            matching_camera_timestamp_south_2.camera_center))
+                        camera_t.append(matching_camera_timestamp_vehicle.camera_center / torch.norm(
+                            matching_camera_timestamp_vehicle.camera_center))
+
+
                 if get_uid == 2: #vehicle_camera has been popped
                     south_2_viewpoint_cam = [camera for camera in temp_list if camera.uid == 1]  # South_1 camera
 
@@ -207,13 +215,16 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                         (camera for camera in south_1_viewpoint_cam if camera.time == get_timestamp),
                         None  # Default value if no match is found
                     )
-                    multi_agent_cams.append(matching_camera_timestamp_south_2)
-                    multi_agent_cams.append(matching_camera_timestamp_south1)
+                    for _ in range(3):
+                        multi_agent_cams.append(matching_camera_timestamp_south_2)
+                        multi_agent_cams.append(matching_camera_timestamp_south1)
 
-                    camera_t.append(matching_camera_timestamp_south_2.camera_center / torch.norm(
-                        matching_camera_timestamp_south_2.camera_center))
-                    camera_t.append(matching_camera_timestamp_south1.camera_center / torch.norm(
-                        matching_camera_timestamp_south1.camera_center))
+                        camera_t.append(matching_camera_timestamp_south_2.camera_center / torch.norm(
+                            matching_camera_timestamp_south_2.camera_center))
+                        camera_t.append(matching_camera_timestamp_south1.camera_center / torch.norm(
+                            matching_camera_timestamp_south1.camera_center))
+
+
                 if get_uid == 1: #south_2 has been pooped
                     south_1_viewpoint_cam = [camera for camera in temp_list if camera.uid == 3]  # South_1 camera
 
@@ -226,12 +237,16 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                         (camera for camera in vehicle_camera_cam if camera.time == get_timestamp),
                         None  # Default value if no match is found
                     )
-                    multi_agent_cams.append(matching_camera_timestamp_south_1)
-                    multi_agent_cams.append(matching_camera_timestamp_vehicle)
-                    camera_t.append(matching_camera_timestamp_south_1.camera_center / torch.norm(
-                        matching_camera_timestamp_south_1.camera_center))
-                    camera_t.append(matching_camera_timestamp_vehicle.camera_center / torch.norm(
-                        matching_camera_timestamp_vehicle.camera_center))
+
+                    for _ in range(3):
+                        multi_agent_cams.append(matching_camera_timestamp_south_1)
+                        multi_agent_cams.append(matching_camera_timestamp_vehicle)
+                        camera_t.append(matching_camera_timestamp_south_1.camera_center / torch.norm(
+                            matching_camera_timestamp_south_1.camera_center))
+                        camera_t.append(matching_camera_timestamp_vehicle.camera_center / torch.norm(
+                            matching_camera_timestamp_vehicle.camera_center))
+
+
 
                 if not viewpoint_stack :
                     viewpoint_stack =  temp_list.copy()
@@ -254,7 +269,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         viewspace_point_tensor_list = []
         imgs = []###### Rewuired for sorting cameras
 
-        for _ in range(len(multi_agent_cams)): # Multi-Agent Training
+        for _ in range(6): # Multi-Agent Training
             for viewpoint_cam in viewpoint_cams:
 
                 render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,
